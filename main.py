@@ -1,6 +1,6 @@
 # %%
 from pydantic_cli import run_and_exit
-from propagator_cli.cli import PropagatorCLI
+from propagator_cli.cli import PropagatorCLILegacy
 from propagator_cli.console import (enable_bootstrap_recording,
                                     enable_bootstrap_export)
 
@@ -13,7 +13,7 @@ def main():
                             basename="propagator_boot",
                             append_timestamp=True)
 
-    run_and_exit(PropagatorCLI)
+    run_and_exit(PropagatorCLILegacy)
 
 
 # %%
