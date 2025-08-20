@@ -47,21 +47,21 @@ def load_parameters(probability_file=None, v0_file=None, p_vegetation=None):
 
 def get_p_time_fn(ros_model_code):
     ros_models = {
-        DEFAULT_TAG: p_time_standard,
-        WANG_TAG: p_time_wang,
-        ROTHERMEL_TAG: p_time_rothermel,
+        "default": p_time_standard,
+        "wang": p_time_wang,
+        "rothermel": p_time_rothermel,
     }
-    p_time_function = ros_models.get(ros_model_code, p_time_wang)
+    p_time_function = ros_models.get(ros_model_code, None)
     return p_time_function
 
 
 def get_p_moist_fn(moist_model_code):
     moist_models = {
-        DEFAULT_TAG: moist_proba_correction_1,
-        NEW_FORMULATION_TAG: moist_proba_correction_1,
-        ROTHERMEL_TAG: moist_proba_correction_2,
+        "default": moist_proba_correction_1,
+        "new_formulation": moist_proba_correction_1,
+        "rothermel": moist_proba_correction_2,
     }
-    p_moist_function = moist_models.get(moist_model_code, moist_proba_correction_1)
+    p_moist_function = moist_models.get(moist_model_code, None)
     return p_moist_function
 
 
