@@ -1,7 +1,7 @@
 from attr import dataclass
 import numpy as np
 import rasterio as rio
-from propagator.geo import GeographicInfo
+from propagator_IO.geo import GeographicInfo
 from propagator.input import PropagatorDataLoaderException
 
 import logging

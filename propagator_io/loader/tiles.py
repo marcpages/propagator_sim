@@ -7,7 +7,7 @@ import rasterio as rio
 import scipy
 import utm
 
-from propagator.geo import GeographicInfo
+from propagator_IO.geo import GeographicInfo
 from propagator.input import PropagatorDataLoaderException
 from propagator.propagator import PropagatorError
 from propagator.settings import DEFAULT_TILES_TAG
