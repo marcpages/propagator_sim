@@ -4,6 +4,7 @@
     "ignitions": [
         "POINT:[46.230624436816434;10.17100745255191]"
     ],
+    "geometry_espg": 4326,
     "boundary_conditions": [
         {
             "time": 0.0,
