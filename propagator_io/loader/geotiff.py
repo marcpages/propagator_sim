@@ -2,7 +2,7 @@ from attr import dataclass
 import numpy as np
 import rasterio as rio
 from propagator_IO.geo import GeographicInfo
-from propagator.input import PropagatorDataLoaderException
+from propagator_io.input import PropagatorDataLoaderException
 
 import logging
 
