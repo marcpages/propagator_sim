@@ -1,3 +1,9 @@
+"""Constants used across the propagation models.
+
+Includes neighborhood geometry, physical coefficients for wind/slope and
+moisture effects, as well as fire-spotting and intensity parameters.
+"""
+
 import numpy as np
 from numpy import pi, array
 
