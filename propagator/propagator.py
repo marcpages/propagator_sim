@@ -1,3 +1,4 @@
+from typing import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -55,7 +56,7 @@ class PropagatorStats:
 
 
 @dataclass(frozen=True)
-class PropagatoOutput:
+class PropagatorOutput:
     time: int
     fire_probability: np.ndarray | None
     ros_mean: np.ndarray | None
@@ -81,23 +82,21 @@ class Propagator:
     do_spotting: bool
 
     # selected simulation functions
-    p_time_fn: callable
-    p_moist_fn: callable
+    p_time_fn: Callable
+    p_moist_fn: Callable
 
     # scheduler object
     scheduler: Scheduler = field(init=False, default_factory=Scheduler)
 
     # simulation state
     time: int = field(init=False, default=0)
-    fire: np.ndarray = field(init=False, default=None)
-    ros: np.ndarray = field(init=False, default=None)
-    fireline_int: np.ndarray = field(init=False, default=None)
-    moisture: np.ndarray = field(init=False, default=None)
-    wind_dir: np.ndarray = field(init=False, default=None)
-    wind_speed: np.ndarray = field(init=False, default=None)
-    actions_moisture: np.ndarray = field(
-        init=False, default=None
-    )  # additional moisture due to fighting actions (ideally it should decay over time)
+    fire: np.ndarray = field(init=False)
+    ros: np.ndarray = field(init=False)
+    fireline_int: np.ndarray = field(init=False)
+    moisture: np.ndarray = field(init=False)
+    wind_dir: np.ndarray = field(init=False)
+    wind_speed: np.ndarray = field(init=False)
+    actions_moisture: np.ndarray = field(init=False)  # additional moisture due to fighting actions (ideally it should decay over time)
 
     def __post_init__(self):
         shape = self.veg.shape
@@ -117,26 +116,26 @@ class Propagator:
                 self.fire[p[0], p[1], t] = 0
 
     def compute_fire_probability(self) -> np.ndarray:
-        values = np.nanmean(self.fire, 2)
+        values = np.mean(self.fire, axis=2)
         return values
 
     def compute_ros_max(self) -> np.ndarray:
-        RoS_max = np.nanmax(self.ros, 2)
+        RoS_max = np.max(self.ros, axis=2)
         return RoS_max
 
     def compute_ros_mean(self) -> np.ndarray:
         RoS_m = np.where(self.ros > 0, self.ros, np.nan)
-        RoS_mean = np.nanmean(RoS_m, 2)
+        RoS_mean = np.nanmean(RoS_m, axis=2)
         RoS_mean = np.where(RoS_mean > 0, RoS_mean, 0)
         return RoS_mean
 
     def compute_fireline_int_max(self) -> np.ndarray:
-        fl_I_max = np.nanmax(self.fireline_int, 2)
+        fl_I_max = np.nanmax(self.fireline_int, axis=2)
         return fl_I_max
 
     def compute_fireline_int_mean(self) -> np.ndarray:
         fl_I_m = np.where(self.fireline_int > 0, self.fireline_int, np.nan)
-        fl_I_mean = np.nanmean(fl_I_m, 2)
+        fl_I_mean = np.nanmean(fl_I_m, axis=2)
         fl_I_mean = np.where(fl_I_mean > 0, fl_I_mean, 0)
         return fl_I_mean
 
@@ -171,6 +170,7 @@ class Propagator:
     ):
         dh = dem_to - dem_from
         alpha_wh = w_h_effect_on_probability(angle_to, w_speed, w_dir, dh, dist_to)
+        alpha_wh = np.maximum(alpha_wh, 0)      # prevent alpha < 0
 
         p_moist = self.p_moist_fn(moist)
         p_moist = np.clip(p_moist, 0, 1.0)
@@ -234,7 +234,7 @@ class Propagator:
         conifer_arr_t = conifer_t.repeat(repeats=num_embers)
         # calculate angle and distance
         ember_angle = RNG.uniform(0, 2.0 * np.pi, size=conifer_arr_r.shape)
-        ember_distance = fire_spotting(ember_angle, self.w_dir, self.w_speed)
+        ember_distance = fire_spotting(ember_angle, self.wind_dir, self.wind_speed)
 
         # filter out short embers
         idx_long_embers = ember_distance > 2 * CELLSIZE
@@ -298,8 +298,8 @@ class Propagator:
             np.zeros(nr_spot.shape),
             CELLSIZE * np.ones(nr_spot.shape),
             moisture[nr_spot, nc_spot],
-            self.w_dir,
-            self.w_speed,
+            self.wind_dir,
+            self.wind_speed,
         )
 
         return nr_spot, nc_spot, nt_spot, transition_time_spot
@@ -453,16 +453,18 @@ class Propagator:
             nt = np.append(nt, nt_spot)
             transition_time = np.append(transition_time, transition_time_spot)
 
-        prop_time = np.around(self.time + transition_time, decimals=1)
+        TICK_PRECISION = 10       
+        prop_tick = np.rint((self.time + transition_time) * TICK_PRECISION)
 
-        def extract_updates(t):
-            idx = np.nonzero(prop_time == t)
+        def extract_updates(tick: np.int64):
+            #idx = np.nonzero(prop_time == t)
+            idx = np.nonzero(prop_tick == tick)
             stacked = np.stack((rows_to[idx], cols_to[idx], nt[idx]), axis=1)
             return stacked
 
         # schedule the new updates
-        unique_time = sorted(np.unique(prop_time))
-        new_updates = list(map(lambda t: (t, extract_updates(t)), unique_time))
+        unique_ticks = np.unique(prop_tick)
+        new_updates = list(map(lambda t: (float(t/TICK_PRECISION), extract_updates(t)), unique_ticks))
 
         return new_updates
 
@@ -474,9 +476,9 @@ class Propagator:
         """
         if self.actions_moisture is None:
             return
-        self.actions_moisture = np.clip(
-            self.actions_moisture - self.actions_moisture * decay_factor, 0, None
-        )
+        k = np.clip(decay_factor, 0, 1)
+        self.actions_moisture *= (1 - k) ** max(time_delta, 0)        
+
 
     def get_moisture(self) -> np.ndarray:
         """
@@ -500,7 +502,7 @@ class Propagator:
         new_updates = self.apply_updates(updates)
         self.scheduler.push_all(new_updates)
 
-    def get_output(self) -> PropagatoOutput:
+    def get_output(self) -> PropagatorOutput:
         fire_probability = self.compute_fire_probability()
         ros_max = self.compute_ros_max()
         ros_mean = self.compute_ros_mean()
@@ -508,7 +510,7 @@ class Propagator:
         fireline_intensity_mean = self.compute_fireline_int_mean()
         stats = self.compute_stats(fire_probability)
 
-        return PropagatoOutput(
+        return PropagatorOutput(
             time=self.time,
             fire_probability=fire_probability,
             ros_mean=ros_mean,
