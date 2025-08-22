@@ -49,6 +49,7 @@ class PropagatorBoundaryConditions:
     - wind_dir: Wind direction map (radians, mathematical convention).
     - wind_speed: Wind speed map (km/h).
     """
+
     time: int
     ignitions: npt.NDArray[np.bool_] | None
     moisture: npt.NDArray[np.floating] | None
@@ -64,6 +65,7 @@ class PropagatorActions:
     - additional_moisture: Extra moisture to add to fuel (%), can be sparse.
     - vegetation_changes: Raster of vegetation type overrides (NaN to skip).
     """
+
     time: int
     additional_moisture: npt.NDArray[np.floating] | None
     vegetation_changes: npt.NDArray[np.floating] | None
@@ -72,6 +74,7 @@ class PropagatorActions:
 @dataclass(frozen=True)
 class PropagatorStats:
     """Summary statistics for the current simulation state."""
+
     n_active: int
     area_mean: float
     area_50: float
@@ -82,6 +85,7 @@ class PropagatorStats:
 @dataclass(frozen=True)
 class PropagatorOutput:
     """Snapshot of simulation outputs at a given time step."""
+
     time: int
     fire_probability: npt.NDArray[np.floating] | None
     ros_mean: npt.NDArray[np.floating] | None
@@ -100,6 +104,7 @@ class Propagator:
     and environmental drivers (wind, moisture) through pluggable probability and
     travel-time models.
     """
+
     # domain parameters for the simulation
 
     # input
@@ -128,7 +133,9 @@ class Propagator:
     moisture: npt.NDArray[np.floating] = field(init=False)
     wind_dir: npt.NDArray[np.floating] = field(init=False)
     wind_speed: npt.NDArray[np.floating] = field(init=False)
-    actions_moisture: npt.NDArray[np.floating] | None = field(init=False)  # additional moisture due to fighting actions (ideally it should decay over time)
+    actions_moisture: npt.NDArray[np.floating] | None = field(
+        init=False
+    )  # additional moisture due to fighting actions (ideally it should decay over time)
 
     def __post_init__(self):
         """Allocate internal state arrays based on the vegetation grid shape."""
@@ -277,7 +284,7 @@ class Propagator:
         """
         dh = dem_to - dem_from
         alpha_wh = w_h_effect_on_probability(angle_to, w_speed, w_dir, dh, dist_to)
-        alpha_wh = np.maximum(alpha_wh, 0)      # prevent alpha < 0
+        alpha_wh = np.maximum(alpha_wh, 0)  # prevent alpha < 0
 
         p_moist = self.p_moist_fn(moist)
         p_moist = np.clip(p_moist, 0, 1.0)
@@ -321,7 +328,10 @@ class Propagator:
                 "Actions cannot be applied in the past. Please check the time of the actions."
             )
 
-        if self.actions_moisture is not None and actions.additional_moisture is not None:
+        if (
+            self.actions_moisture is not None
+            and actions.additional_moisture is not None
+        ):
             self.actions_moisture += actions.additional_moisture
         if actions.vegetation_changes is not None:
             # mutate vegetation where needed
@@ -605,18 +615,20 @@ class Propagator:
             nt = np.append(nt, nt_spot)
             transition_time = np.append(transition_time, transition_time_spot)
 
-        TICK_PRECISION = 10       
+        TICK_PRECISION = 10
         prop_tick = np.rint((self.time + transition_time) * TICK_PRECISION)
 
         def extract_updates(tick: np.int64):
-            #idx = np.nonzero(prop_time == t)
+            # idx = np.nonzero(prop_time == t)
             idx = np.nonzero(prop_tick == tick)
             stacked = np.stack((rows_to[idx], cols_to[idx], nt[idx]), axis=1)
             return stacked
 
         # schedule the new updates
         unique_ticks = np.unique(prop_tick)
-        new_updates = list(map(lambda t: (int(t/TICK_PRECISION), extract_updates(t)), unique_ticks))
+        new_updates = list(
+            map(lambda t: (int(t / TICK_PRECISION), extract_updates(t)), unique_ticks)
+        )
 
         return new_updates
 
@@ -633,8 +645,7 @@ class Propagator:
         if self.actions_moisture is None:
             return
         k = np.clip(decay_factor, 0, 1)
-        self.actions_moisture *= (1 - k) ** max(time_delta, 0)        
-
+        self.actions_moisture *= (1 - k) ** max(time_delta, 0)
 
     def get_moisture(self) -> npt.NDArray[np.floating]:
         """

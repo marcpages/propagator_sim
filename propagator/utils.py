@@ -20,7 +20,9 @@ def normalize(angle_to_norm: npt.NDArray[np.floating]) -> npt.NDArray[np.floatin
     return (angle_to_norm + pi) % (2 * pi) - pi
 
 
-def add_point(img: npt.NDArray[np.floating], c: int, r: int, val: float) -> list[tuple[int, int]]:
+def add_point(
+    img: npt.NDArray[np.floating], c: int, r: int, val: float
+) -> list[tuple[int, int]]:
     """Set a single pixel to `val` if inside bounds.
 
     Returns the list with the written coordinate `(r, c)` when in-bounds, or

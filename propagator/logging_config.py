@@ -7,6 +7,7 @@ import sys
 # logging configuration
 class InfoFilter(logging.Filter):
     """Filter that lets INFO/DEBUG go to stdout handler."""
+
     def filter(self, rec):
         return rec.levelno in (logging.DEBUG, logging.INFO)
 

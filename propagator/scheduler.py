@@ -10,9 +10,11 @@ from sortedcontainers import SortedDict
 import numpy as np
 import numpy.typing as npt
 
+
 @dataclass
 class Scheduler:
     """Handles scheduling of propagation updates by time."""
+
     list: SortedDict = field(default_factory=SortedDict)
 
     def push(self, coords: npt.NDArray[np.integer], time: int) -> None:
@@ -82,13 +84,16 @@ class Scheduler:
             return None
 
         next_time, _next_updates = self.list.peekitem(index=0)
-        return next_time # type: ignore
+        return next_time  # type: ignore
 
     def __call__(self):
         """Iterate over scheduled updates, allowing dynamic rescheduling."""
         while len(self) > 0:
             c_time, updates = self.pop()
             print("u")
-            new_updates: Iterable[tuple[int, npt.NDArray[np.integer]]] = yield c_time, updates
+            new_updates: Iterable[tuple[int, npt.NDArray[np.integer]]] = yield (
+                c_time,
+                updates,
+            )
             print("n")
             self.push_all(new_updates)

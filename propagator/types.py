@@ -37,4 +37,3 @@ class PMoistFn(Protocol):
     """
 
     def __call__(self, moist: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]: ...
-

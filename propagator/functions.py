@@ -334,7 +334,9 @@ def w_h_effect_on_probability(
     return wh
 
 
-def moist_proba_correction_1(moist: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+def moist_proba_correction_1(
+    moist: npt.NDArray[np.floating],
+) -> npt.NDArray[np.floating]:
     """
     Moisture correction to the transition probability p_{i,j}.
 
@@ -355,7 +357,9 @@ def moist_proba_correction_1(moist: npt.NDArray[np.floating]) -> npt.NDArray[np.
     return p_moist
 
 
-def moist_proba_correction_2(moist: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+def moist_proba_correction_2(
+    moist: npt.NDArray[np.floating],
+) -> npt.NDArray[np.floating]:
     """
     Moisture correction to p_{i,j} (older formulation, Baghino; Trucchia et al., 2020).
     Parameters come from constants.
