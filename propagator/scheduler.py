@@ -4,15 +4,17 @@ Stores future updates grouped by simulation time and exposes utilities to push
 events, pop the earliest batch, and inspect active realizations.
 """
 
+from typing import Iterable
 from sortedcontainers import SortedDict
 import numpy as np
+import numpy.typing as npt
 
 
 class Scheduler:
     """Handles scheduling of propagation updates by time."""
 
-    def __init__(self):
-        self.list = SortedDict()
+    def __init__(self) -> None:
+        self.list: SortedDict = SortedDict()
 
         # fix the change in SortedDict api
         self.list_kw = {"last": False}
@@ -23,7 +25,7 @@ class Scheduler:
         except TypeError:
             self.list_kw = {"index": 0}
 
-    def push(self, coords, time):
+    def push(self, coords: npt.NDArray[np.integer], time: int | float) -> None:
         """Schedule a set of coordinates at a given time.
 
         Args:
@@ -34,7 +36,7 @@ class Scheduler:
             self.list[time] = []
         self.list[time].append(coords)
 
-    def push_all(self, updates):
+    def push_all(self, updates: Iterable[tuple[int | float, npt.NDArray[np.integer]]]) -> None:
         """Push multiple updates.
 
         Args:
@@ -43,7 +45,7 @@ class Scheduler:
         for t, u in updates:
             self.push(u, t)
 
-    def pop(self):
+    def pop(self) -> tuple[int | float, list[npt.NDArray[np.integer]]]:
         """Pop and return the earliest scheduled batch.
 
         Returns:
@@ -52,7 +54,7 @@ class Scheduler:
         item = self.list.popitem(**self.list_kw)
         return item
 
-    def active(self):
+    def active(self) -> npt.NDArray[np.integer]:
         """
         Return the active realization indices that have a scheduled update.
 
@@ -64,11 +66,11 @@ class Scheduler:
         )
         return active_t
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Number of distinct scheduled time keys."""
         return len(self.list)
 
-    def next_time(self) -> int | None:
+    def next_time(self) -> int | float | None:
         """
         Return the earliest scheduled time without mutating the queue.
 
@@ -86,6 +88,6 @@ class Scheduler:
         while len(self) > 0:
             c_time, updates = self.pop()
             print("u")
-            new_updates = yield c_time, updates
+            new_updates: Iterable[tuple[int | float, npt.NDArray[np.integer]]] = yield c_time, updates
             print("n")
             self.push_all(new_updates)

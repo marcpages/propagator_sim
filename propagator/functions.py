@@ -6,7 +6,9 @@ intensity utilities used by the core propagator.
 """
 
 import os
+from typing import Callable, Optional
 import numpy as np
+import numpy.typing as npt
 
 from propagator.constants import (
     D1,
@@ -36,7 +38,11 @@ from propagator.utils import (
 )
 
 
-def load_parameters(probability_file=None, v0_file=None, p_vegetation=None):
+def load_parameters(
+    probability_file: str | None = None,
+    v0_file: str | None = None,
+    p_vegetation: str | None = None,
+) -> None:
     """Override default vegetation parameters from text files.
 
     - probability_file: Path to vegetation-to-vegetation probability table.
@@ -52,7 +58,9 @@ def load_parameters(probability_file=None, v0_file=None, p_vegetation=None):
         p_veg = np.loadtxt(p_vegetation)
 
 
-def get_p_time_fn(ros_model_code):
+def get_p_time_fn(
+    ros_model_code: str,
+) -> Optional[Callable[..., tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]]]:
     """Select a rate-of-spread model by code.
 
     Returns a function with signature `(v0, dem_from, dem_to, veg_from, veg_to,
@@ -67,7 +75,9 @@ def get_p_time_fn(ros_model_code):
     return p_time_function
 
 
-def get_p_moist_fn(moist_model_code):
+def get_p_moist_fn(
+    moist_model_code: str,
+) -> Optional[Callable[[npt.NDArray[np.floating]], npt.NDArray[np.floating]]]:
     """Select a moisture probability correction by code."""
     moist_models = {
         "default": moist_proba_correction_1,
@@ -79,8 +89,16 @@ def get_p_moist_fn(moist_model_code):
 
 
 def p_time_rothermel(
-    dem_from, dem_to, veg_from, veg_to, angle_to, dist, moist, w_dir, w_speed
-):
+    dem_from: npt.NDArray[np.floating],
+    dem_to: npt.NDArray[np.floating],
+    veg_from: npt.NDArray[np.integer],
+    veg_to: npt.NDArray[np.integer],
+    angle_to: npt.NDArray[np.floating],
+    dist: npt.NDArray[np.floating],
+    moist: npt.NDArray[np.floating],
+    w_dir: npt.NDArray[np.floating],
+    w_speed: npt.NDArray[np.floating],
+) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """Propagation time and ROS according to Rothermel-like scaling.
 
     Args:
@@ -136,8 +154,17 @@ def p_time_rothermel(
 
 
 def p_time_wang(
-    v0, dem_from, dem_to, veg_from, veg_to, angle_to, dist, moist, w_dir, w_speed
-):
+    v0: npt.NDArray[np.floating],
+    dem_from: npt.NDArray[np.floating],
+    dem_to: npt.NDArray[np.floating],
+    veg_from: npt.NDArray[np.integer],
+    veg_to: npt.NDArray[np.integer],
+    angle_to: npt.NDArray[np.floating],
+    dist: npt.NDArray[np.floating],
+    moist: npt.NDArray[np.floating],
+    w_dir: npt.NDArray[np.floating],
+    w_speed: npt.NDArray[np.floating],
+) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """Propagation time and ROS according to Wang et al.
 
     
@@ -195,8 +222,17 @@ def p_time_wang(
 
 
 def p_time_standard(
-    v0, dem_from, dem_to, veg_from, veg_to, angle_to, dist, moist, w_dir, w_speed
-):
+    v0: npt.NDArray[np.floating],
+    dem_from: npt.NDArray[np.floating],
+    dem_to: npt.NDArray[np.floating],
+    veg_from: npt.NDArray[np.integer],
+    veg_to: npt.NDArray[np.integer],
+    angle_to: npt.NDArray[np.floating],
+    dist: npt.NDArray[np.floating],
+    moist: npt.NDArray[np.floating],
+    w_dir: npt.NDArray[np.floating],
+    w_speed: npt.NDArray[np.floating],
+) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """Baseline propagation time and ROS with combined wind-slope factor.
 
     Args:
@@ -228,7 +264,13 @@ def p_time_standard(
     return t, v_wh
 
 
-def w_h_effect(angle_to, w_speed, w_dir, dh, dist):
+def w_h_effect(
+    angle_to: npt.NDArray[np.floating],
+    w_speed: npt.NDArray[np.floating],
+    w_dir: npt.NDArray[np.floating],
+    dh: npt.NDArray[np.floating],
+    dist: npt.NDArray[np.floating],
+) -> npt.NDArray[np.floating]:
     """Combined wind and slope multiplicative factor on ROS.
 
     Returns:
@@ -246,7 +288,13 @@ def w_h_effect(angle_to, w_speed, w_dir, dh, dist):
     return w_h
 
 
-def w_h_effect_on_probability(angle_to, w_speed, w_dir, dh, dist_to):
+def w_h_effect_on_probability(
+    angle_to: npt.NDArray[np.floating],
+    w_speed: npt.NDArray[np.floating],
+    w_dir: npt.NDArray[np.floating],
+    dh: npt.NDArray[np.floating],
+    dist_to: npt.NDArray[np.floating],
+) -> npt.NDArray[np.floating]:
     """Scale the wind/slope factor for use as probability exponent.
 
     Returns:
@@ -262,7 +310,7 @@ def w_h_effect_on_probability(angle_to, w_speed, w_dir, dh, dist_to):
     return wh
 
 
-def moist_proba_correction_1(moist):
+def moist_proba_correction_1(moist: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
     """
     e_m is the moinsture correction to the transition probability p_{i,j}.
     e_m = f(m), with m the Fine Fuel Moisture Content
@@ -284,7 +332,7 @@ def moist_proba_correction_1(moist):
     return p_moist
 
 
-def moist_proba_correction_2(moist):
+def moist_proba_correction_2(moist: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
     """
     e_m is the moinsture correction to the transition probability p_{i,j}. e_m = f(m), with m the Fine Fuel Moisture Content
     Old formulation by Baghino, adopted in Trucchia et al, Fire 2020.
@@ -294,7 +342,11 @@ def moist_proba_correction_2(moist):
     return p_moist
 
 
-def fire_spotting(angle_to, w_dir, w_speed):
+def fire_spotting(
+    angle_to: npt.NDArray[np.floating],
+    w_dir: npt.NDArray[np.floating],
+    w_speed: npt.NDArray[np.floating],
+) -> npt.NDArray[np.floating]:
     """this function evaluates the distance that an ember can reach, by the use of the Alexandridis' formulation"""
     r_n = np.random.normal(
         SPOTTING_RN_MEAN, SPOTTING_RN_STD, size=angle_to.shape
@@ -310,20 +362,33 @@ def fire_spotting(angle_to, w_dir, w_speed):
 # functions useful for evaluating the fire line intensity
 
 
-def lhv_dead_fuel(hhv, dffm):
+def lhv_dead_fuel(
+    hhv: npt.NDArray[np.floating],
+    dffm: npt.NDArray[np.floating],
+) -> npt.NDArray[np.floating]:
     """Lower heating value of dead fuels given higher heating value and FFMC."""
     lhv = hhv * (1.0 - (dffm / 100.0)) - Q * (dffm / 100.0)
     return lhv
 
 
-def lhv_canopy(hhv, hum):
+def lhv_canopy(
+    hhv: npt.NDArray[np.floating],
+    hum: npt.NDArray[np.floating],
+) -> npt.NDArray[np.floating]:
     """Lower heating value of canopy fuels given humidity (percent)."""
     lhv = hhv * (1.0 - (hum / 100.0)) - Q * (hum / 100.0)
     lhv[np.isnan(lhv)] = 0
     return lhv
 
 
-def fireline_intensity(d0, d1, ros, lhv_dead_fuel, lhv_canopy, rg=None):
+def fireline_intensity(
+    d0: npt.NDArray[np.floating],
+    d1: npt.NDArray[np.floating],
+    ros: npt.NDArray[np.floating],
+    lhv_dead_fuel: npt.NDArray[np.floating],
+    lhv_canopy: npt.NDArray[np.floating],
+    rg: npt.NDArray[np.floating] | None = None,
+) -> npt.NDArray[np.floating]:
     """Estimate fireline intensity (kW/m) from fuel loads and ROS.
 
     Supports an optional `rg` fraction to blend surface/canopy contributions.
