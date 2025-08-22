@@ -11,7 +11,7 @@ from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
 from propagator.propagator import Propagator
 import numpy as np
 
-from .console import info_msg, ok_msg, setup_console
+from propagator_cli.console import info_msg, ok_msg, setup_console
 
 
 # --- CLI configuration -------------------------------------------------------
