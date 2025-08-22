@@ -8,11 +8,16 @@ from pydantic import (BaseModel, Field,
 
 # ---- project utils ----------------------------------------------------------
 from propagator.functions import get_p_moist_fn, get_p_time_fn
+from propagator.propagator import (
+    PropagatorActions,
+    PropagatorBoundaryConditions,
+)
 
 from propagator_io.boundary_conditions import BoundaryConditionsInput
 from propagator_io.geometry import (
     GeometryParser, Geometry, DEFAULT_EPSG_GEOMETRY
 )
+from propagator_io.geo import GeographicInfo
 
 
 # ---- configuration ----------------------------------------------------------
@@ -196,3 +201,25 @@ class PropagatorConfigurationLegacy(BaseModel):
             raise ValueError("boundary_conditions have duplicate times.")
 
         return self
+
+    def get_propagator_bcs(
+        self,
+        geo_info: GeographicInfo
+    ) -> List[PropagatorBoundaryConditions]:
+        # NOTE: boundary conditions should be sorted by time already
+        return [
+            bc.get_propagator_bc(geo_info)
+            for bc in self.boundary_conditions
+        ]
+
+    def get_propagator_actions(
+        self,
+        geo_info: GeographicInfo
+    ) -> List[PropagatorActions]:
+        # NOTE: boundary conditions should be sorted by time already
+        actions_list = []
+        for bc in self.boundary_conditions:
+            actions = bc.get_propagator_action(geo_info)
+            if actions:
+                actions_list.append(actions)
+        return actions_list
