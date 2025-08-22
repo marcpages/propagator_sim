@@ -130,36 +130,11 @@ class PropagatorConfigurationLegacy(BaseModel):
         # 3) nested ignitions inside boundary_conditions[*]
         bcs = data.get("boundary_conditions")
         if isinstance(bcs, list):
-            for i, bc in enumerate(bcs):
-                if "ignitions" in bc:
-                    bc["ignitions"] = GeometryParser.parse_geometry_list(
-                                        bc["ignitions"],
-                                        allowed={"point", "line", "polygon"},
-                                        epsg=epsg)
-                # firefighting actions
-                if "waterline_action" in bc:
-                    bc["waterline_action"] = \
-                        GeometryParser.parse_geometry_list(
-                                        bc["waterline_action"],
-                                        allowed={"line"},
-                                        epsg=epsg)
-                if "canadair" in bc:
-                    bc["canadair"] = GeometryParser.parse_geometry_list(
-                                        bc["canadair"],
-                                        allowed={"line"},
-                                        epsg=epsg)
-                if "helicopter" in bc:
-                    bc["helicopter"] = GeometryParser.parse_geometry_list(
-                                        bc["helicopter"],
-                                        allowed={"line"},
-                                        epsg=epsg)
-                if "heavy_action" in bc:
-                    bc["heavy_action"] = GeometryParser.parse_geometry_list(
-                                        bc["heavy_action"],
-                                        allowed={"line"},
-                                        epsg=epsg)
-            # substitute the list
-            data["boundary_conditions"] = bcs
+            data["boundary_conditions"] = [
+                BoundaryConditionsInput.model_validate(bc,
+                                                       context={"epsg": epsg})
+                for bc in bcs
+            ]
         return data
 
     # ---------- cross-field checks & friendly console messages ----------

@@ -1,9 +1,13 @@
 from __future__ import annotations
 from typing import List, Optional
 import numpy as np
-from pydantic import (BaseModel, ConfigDict, Field, field_validator)
+from pydantic import (BaseModel, ConfigDict, Field,
+                      field_validator, model_validator)
 
-from propagator_io.geometry import Geometry, GeoLine
+from propagator_io.geometry import (
+    GeometryParser, Geometry, GeoLine,
+    DEFAULT_EPSG_GEOMETRY
+)
 
 # ---- project utils ----------------------------------------------------------
 from propagator.utils import normalize
@@ -60,3 +64,25 @@ class BoundaryConditionsInput(BaseModel):
         if v < 0:
             raise ValueError("time must be >= 0")
         return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def _parse_geometry_fields(cls, data: dict, info):
+        if not isinstance(data, dict):
+            return data
+        epsg = (info.context or {}).get("epsg", DEFAULT_EPSG_GEOMETRY)
+        # field -> allowed kinds
+        spec = {
+            "ignitions": {"point", "line", "polygon"},
+            "waterline_action": {"line"},
+            "canadair": {"line"},
+            "helicopter": {"line"},
+            "heavy_action": {"line"},
+        }
+        for key, allowed in spec.items():
+            val = data.get(key)
+            if isinstance(val, list) and (not val or isinstance(val[0], str)):
+                data[key] = GeometryParser.parse_geometry_list(
+                    val, allowed=allowed, epsg=epsg
+                )
+        return data
