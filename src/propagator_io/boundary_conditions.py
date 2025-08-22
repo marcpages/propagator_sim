@@ -6,11 +6,17 @@ from pydantic import (BaseModel, ConfigDict, Field,
 
 from propagator_io.geometry import (
     GeometryParser, Geometry, GeoLine,
-    DEFAULT_EPSG_GEOMETRY
+    DEFAULT_EPSG_GEOMETRY,
+    rasterize_geometries
 )
 
 # ---- project utils ----------------------------------------------------------
 from propagator.utils import normalize
+from propagator.propagator import (
+    PropagatorActions,
+    PropagatorBoundaryConditions,
+)
+from propagator_io.geo import GeographicInfo
 
 
 # ---- wind helpers -----------------------------------------------------------
@@ -86,3 +92,36 @@ class BoundaryConditionsInput(BaseModel):
                     val, allowed=allowed, epsg=epsg
                 )
         return data
+
+    def get_propagator_bc(
+            self,
+            geo_info: GeographicInfo
+    ) -> PropagatorBoundaryConditions:
+        w_speed_arr = np.ones(geo_info.shape) * self.w_speed
+        w_dir_arr = np.ones(geo_info.shape) * self.w_dir
+        moisture_arr = np.ones(geo_info.shape) * self.moisture
+        if self.ignitions:
+            ign_arr = rasterize_geometries(
+                geometries=self.ignitions,
+                geo_info=geo_info,
+                default_value=1,  # set 1 for ignited pixels
+                dtype="uint8",
+                merge_alg="replace"
+                )
+        else:
+            ign_arr = None
+        # convert info in PropagatorBoundaryConditions
+        return PropagatorBoundaryConditions(
+            time=self.time,
+            wind_speed=w_speed_arr,
+            wind_dir=w_dir_arr,
+            moisture=moisture_arr,
+            ignitions=ign_arr
+        )
+
+    def get_propagator_action(
+        self,
+        geo_info: GeographicInfo
+    ) -> PropagatorActions:
+        """Convert to PropagatorActions."""
+        return []
