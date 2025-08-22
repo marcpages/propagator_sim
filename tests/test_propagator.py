@@ -356,6 +356,204 @@ def test_get_moisture(sample_propagator):
     expected_moisture_clipped = np.full(prop.veg.shape, 100.0)
     assert np.all(prop.get_moisture() == expected_moisture_clipped)
 
+def test_apply_updates(sample_propagator):
+    prop = sample_propagator
+    prop.time = 0
+    prop.moisture = np.full(prop.veg.shape, 10.0)
+    prop.wind_dir = np.full(prop.veg.shape, 0.0)
+    prop.wind_speed = np.full(prop.veg.shape, 5.0)
+
+    # Mock p_time_fn to return deterministic values
+    # transition_time, ros
+    prop.p_time_fn = MagicMock(return_value=(np.array([1.0, 2.0, 1.5, 2.5]), np.array([10.0, 8.0, 12.0, 9.0])))
+
+    # Mock RNG for propagation probability
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr("propagator.propagator.RNG", MagicMock())
+        # We need 8 random numbers for 2 initial points * 4 neighbours = 8 potential propagations
+        # Assuming NEIGHBOURS_ARRAY has 4 entries in this scenario for simplicity of RNG mock
+        # (0,0) has neighbours, (1,1) has neighbours
+        # prop.RNG.random.return_value = np.array([0.1, 0.9, 0.1, 0.9, 0.1, 0.9, 0.1, 0.9])
+        # Let's make it more specific for 2 successful propagations out of 8 potential (2 from each initial fire point)
+        # E.g., for (0,0) -> N_1 and N_3 propagate, for (1,1) -> N_1 and N_3 propagate
+        prop.RNG.random.return_value = np.array([0.1, 0.6, 0.1, 0.6, 0.1, 0.6, 0.1, 0.6]) # first and third of each group succeed
+        
+        # updates from scheduler
+        updates = [np.array([0, 0, 0]), np.array([1, 1, 0])] # (row, col, realization)
+
+        # Before update: fire is 0 everywhere
+        assert np.all(prop.fire == 0)
+
+        # Ensure do_spotting is false for this test
+        prop.do_spotting = False
+
+        new_updates = prop.apply_updates(updates)
+
+        # Check fire array: initial ignitions should be set to 1
+        assert prop.fire[0, 0, 0] == 1
+        assert prop.fire[1, 1, 0] == 1
+
+        # Check new_updates structure and content
+        # We have 2 successful propagations from (0,0) and 2 from (1,1)
+        # Total 4 new updates. They should be scheduled at prop.time + transition_time
+        # Mocked transition_times are [1.0, 2.0, 1.5, 2.5]
+        # So new_updates should contain times [1.0, 1.5, 2.0, 2.5] and corresponding cells
+        assert len(new_updates) == 4
+        assert new_updates[0][0] == 1.0 # time
+        assert new_updates[1][0] == 1.5 # time
+        assert new_updates[2][0] == 2.0 # time
+        assert new_updates[3][0] == 2.5 # time
+        
+        # Check that ros and fireline_int are updated for the propagated cells
+        # This part is still tricky due to NEIGHBOURS_ARRAY structure and how valid_fire_mask filters
+        # Let's directly inspect `prop.ros` and `prop.fireline_int` for non-zero values
+        # after the update. We expect 4 cells to be updated.
+        assert np.count_nonzero(prop.ros) == 4
+        assert np.count_nonzero(prop.fireline_int) == 4
+        assert np.all(prop.ros[prop.ros != 0] == np.array([10.0, 12.0, 8.0, 9.0])) # Based on mocked ros values
+        # fireline_int calculation uses ros and veg_parameters, which are part of sample_propagator
+        # and mock_p_time_fn is set. We can't directly assert values without re-calculating or
+        # knowing the exact constants. A non-zero check is sufficient for now.
+        assert np.all(prop.fireline_int[prop.fireline_int != 0] > 0)
+
+
+def test_compute_spotting(sample_propagator):
+    prop = sample_propagator
+    prop.time = 0
+    prop.moisture = np.full(prop.veg.shape, 10.0)
+    prop.wind_dir = np.full(prop.veg.shape, 0.0)
+    prop.wind_speed = np.full(prop.veg.shape, 5.0)
+
+    # Mock RNG for deterministic results
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr("propagator.propagator.RNG", MagicMock())
+        mp.setattr("propagator.propagator.CELLSIZE", 1.0) # Simplify cellsize for distance calculations
+        
+        # Test 1: Conifer mask is active (veg_type 5)
+        updates = [np.array([0, 0, 0])] # (row, col, realization)
+        original_veg = prop.veg.copy()
+        prop.veg[0,0] = 5 # Make (0,0) a conifer for this test
+        veg_type = prop.veg[updates[0][0], updates[0][1]]
+
+        # Mock RNG outputs for compute_spotting
+        prop.RNG.poisson.return_value = np.array([2]) # 2 embers
+        prop.RNG.uniform.side_effect = [
+            np.array([np.pi/2, np.pi]), # ember_angle (90 degrees, 180 degrees)
+            np.array([5.0, 5.0]), # ember_distance (larger than 2*CELLSIZE = 2*1.0 = 2.0)
+            np.array([0.1, 0.1]) # success_spot_mask (both succeed)
+        ]
+        # Mock fire_spotting to return constant distance for easier calculation
+        mp.setattr("propagator.propagator.fire_spotting", lambda angle, w_dir, w_speed: np.array([5.0, 5.0]))
+
+        prop.p_time_fn = MagicMock(return_value=(np.array([1.0, 1.0]), np.array([10.0, 10.0]))) # transition_time_spot, _ros_spot
+
+        nr_spot, nc_spot, nt_spot, transition_time_spot = prop.compute_spotting(veg_type, updates)
+
+        # Expected calculations:
+        # CELLSIZE = 1.0
+        # Ember 1: angle = pi/2 (90 deg), distance = 5.0
+        #   delta_r = 5.0 * cos(pi/2) = 0
+        #   delta_c = 5.0 * sin(pi/2) = 5
+        #   nb_spot_r = 0 / 1.0 = 0
+        #   nb_spot_c = 5 / 1.0 = 5
+        #   nr_spot = 0 + 0 = 0
+        #   nc_spot = 0 + 5 = 5
+        # Ember 2: angle = pi (180 deg), distance = 5.0
+        #   delta_r = 5.0 * cos(pi) = -5
+        #   delta_c = 5.0 * sin(pi) = 0
+        #   nb_spot_r = -5 / 1.0 = -5
+        #   nb_spot_c = 0 / 1.0 = 0
+        #   nr_spot = 0 + (-5) = -5 (clipped to 0)
+        #   nc_spot = 0 + 0 = 0
+
+        # After clipping bounds: nr_spot = [0,0], nc_spot = [5,0] (assuming shape is 3x3)
+        # Our sample_propagator has veg.shape = (3,3). So max index is 2.
+        # nc_spot = 5 will be clipped to 2.
+        assert len(nr_spot) == 2 # 2 successful spots
+        assert np.allclose(nr_spot, [0, 0])
+        assert np.allclose(nc_spot, [2, 0]) # 5 clipped to 2
+        assert np.allclose(nt_spot, [0, 0])
+        assert np.allclose(transition_time_spot, [1.0, 1.0])
+
+        prop.veg = original_veg # Restore original veg
+
+    # Test 2: Conifer mask is not active (veg_type is not 5)
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr("propagator.propagator.RNG", MagicMock())
+        mp.setattr("propagator.propagator.CELLSIZE", 1.0)
+        updates = [np.array([0, 0, 0])]
+        veg_type = prop.veg[updates[0][0], updates[0][1]] # This should be 1 from sample_propagator
+
+        # Mock RNG outputs for compute_spotting (these should not matter if conifer_mask is false)
+        prop.RNG.poisson.return_value = np.array([2])
+        prop.RNG.uniform.side_effect = [
+            np.array([np.pi/2, np.pi]),
+            np.array([5.0, 5.0]),
+            np.array([0.1, 0.1])
+        ]
+        mp.setattr("propagator.propagator.fire_spotting", lambda angle, w_dir, w_speed: np.array([5.0, 5.0]))
+        prop.p_time_fn = MagicMock(return_value=(np.array([1.0, 1.0]), np.array([10.0, 10.0])))
+
+        nr_spot, nc_spot, nt_spot, transition_time_spot = prop.compute_spotting(veg_type, updates)
+
+        assert len(nr_spot) == 0 # No successful spots because conifer_mask is false
+
+    # Test 3: Spotting with embers landing outside bounds (negative coordinates)
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr("propagator.propagator.RNG", MagicMock())
+        mp.setattr("propagator.propagator.CELLSIZE", 1.0)
+        updates = [np.array([0, 0, 0])]
+        original_veg = prop.veg.copy()
+        prop.veg[0,0] = 5
+        veg_type = prop.veg[updates[0][0], updates[0][1]]
+
+        prop.RNG.poisson.return_value = np.array([1])
+        prop.RNG.uniform.side_effect = [
+            np.array([3 * np.pi / 2]), # ember_angle (270 degrees)
+            np.array([5.0]), # ember_distance
+            np.array([0.1])
+        ]
+        mp.setattr("propagator.propagator.fire_spotting", lambda angle, w_dir, w_speed: np.array([5.0]))
+        prop.p_time_fn = MagicMock(return_value=(np.array([1.0]), np.array([10.0])))
+
+        nr_spot, nc_spot, nt_spot, transition_time_spot = prop.compute_spotting(veg_type, updates)
+
+        # Expected: delta_r = 0 + 5.0 * cos(270) = 0
+        #           delta_c = 0 + 5.0 * sin(270) = -5
+        #           nr_spot = 0, nc_spot = -5 (clipped to 0)
+        assert len(nr_spot) == 1
+        assert np.allclose(nr_spot, [0])
+        assert np.allclose(nc_spot, [0]) # -5 clipped to 0
+        prop.veg = original_veg # Restore original veg
+
+    # Test 4: Spotting with embers landing outside bounds (positive coordinates)
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr("propagator.propagator.RNG", MagicMock())
+        mp.setattr("propagator.propagator.CELLSIZE", 1.0)
+        updates = [np.array([0, 0, 0])]
+        original_veg = prop.veg.copy()
+        prop.veg[0,0] = 5
+        veg_type = prop.veg[updates[0][0], updates[0][1]]
+
+        prop.RNG.poisson.return_value = np.array([1])
+        prop.RNG.uniform.side_effect = [
+            np.array([np.pi/4]), # ember_angle (45 degrees)
+            np.array([5.0]), # ember_distance
+            np.array([0.1])
+        ]
+        mp.setattr("propagator.propagator.fire_spotting", lambda angle, w_dir, w_speed: np.array([5.0]))
+        prop.p_time_fn = MagicMock(return_value=(np.array([1.0]), np.array([10.0])))
+
+        nr_spot, nc_spot, nt_spot, transition_time_spot = prop.compute_spotting(veg_type, updates)
+
+        # Expected: delta_r = 0 + 5.0 * cos(45) approx 3.53
+        #           delta_c = 0 + 5.0 * sin(45) approx 3.53
+        #           nr_spot = 3 (clipped to 2), nc_spot = 3 (clipped to 2)
+        assert len(nr_spot) == 1
+        assert np.allclose(nr_spot, [2]) # 3 clipped to 2
+        assert np.allclose(nc_spot, [2]) # 3 clipped to 2
+        prop.veg = original_veg # Restore original veg
+
 def test_step(sample_propagator):
     prop = sample_propagator
     
@@ -389,11 +587,12 @@ def test_get_output(sample_propagator):
 
     assert isinstance(output, PropagatoOutput)
     assert output.time == 5
-    assert np.allclose(output.fire_probability, prop.compute_fire_probability())
-    assert np.allclose(output.ros_mean, prop.compute_ros_mean())
-    assert np.allclose(output.ros_max, prop.compute_ros_max())
-    assert np.allclose(output.fireline_int_mean, prop.compute_fireline_int_mean())
-    assert np.allclose(output.fireline_int_max, prop.compute_fireline_int_max())
+
+    assert np.allclose(output.fire_probability, prop.compute_fire_probability())                            # type: ignore
+    assert np.allclose(output.ros_mean, prop.compute_ros_mean())                            # type: ignore
+    assert np.allclose(output.ros_max, prop.compute_ros_max())                          # type: ignore
+    assert np.allclose(output.fireline_int_mean, prop.compute_fireline_int_mean())                          # type: ignore
+    assert np.allclose(output.fireline_int_max, prop.compute_fireline_int_max())                            # type: ignore
     assert isinstance(output.stats, PropagatorStats)
 
 def test_next_time(sample_propagator):
