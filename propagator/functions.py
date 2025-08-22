@@ -33,9 +33,8 @@ from propagator.constants import (
     SPOTTING_RN_MEAN,
     SPOTTING_RN_STD,
 )
-from propagator.utils import (
-    normalize,
-)
+from propagator.utils import normalize
+from propagator.types import PTimeFn, PMoistFn
 
 
 def load_parameters(
@@ -58,9 +57,7 @@ def load_parameters(
         p_veg = np.loadtxt(p_vegetation)
 
 
-def get_p_time_fn(
-    ros_model_code: str,
-) -> Optional[Callable[..., tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]]]:
+def get_p_time_fn(ros_model_code: str) -> Optional[PTimeFn]:
     """Select a rate-of-spread model by code.
 
     Returns a function with signature `(v0, dem_from, dem_to, veg_from, veg_to,
@@ -75,9 +72,7 @@ def get_p_time_fn(
     return p_time_function
 
 
-def get_p_moist_fn(
-    moist_model_code: str,
-) -> Optional[Callable[[npt.NDArray[np.floating]], npt.NDArray[np.floating]]]:
+def get_p_moist_fn(moist_model_code: str) -> Optional[PMoistFn]:
     """Select a moisture probability correction by code."""
     moist_models = {
         "default": moist_proba_correction_1,
@@ -101,19 +96,27 @@ def p_time_rothermel(
 ) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """Propagation time and ROS according to Rothermel-like scaling.
 
-    Args:
-        dem_from (np.ndarray): Elevation of source cells.
-        dem_to (np.ndarray): Elevation of neighbor cells.
-        veg_from (np.ndarray): Vegetation at source (int, 1-based).
-        veg_to (np.ndarray): Vegetation at neighbor (int, 1-based).
-        angle_to (np.ndarray): Direction to neighbor (radians).
-        dist (np.ndarray): Lattice distance to neighbor (cells).
-        moist (np.ndarray): Moisture values (%).
-        w_dir (np.ndarray): Wind direction (radians).
-        w_speed (np.ndarray): Wind speed (km/h).
+    Parameters
+    ----------
+    dem_from, dem_to : numpy.ndarray
+        Elevation at source and neighbor cells.
+    veg_from, veg_to : numpy.ndarray
+        Vegetation types (1-based) at source and neighbor cells.
+    angle_to : numpy.ndarray
+        Direction to neighbor (radians).
+    dist : numpy.ndarray
+        Lattice distance to neighbor (cells).
+    moist : numpy.ndarray
+        Moisture values (%).
+    w_dir : numpy.ndarray
+        Wind direction (radians).
+    w_speed : numpy.ndarray
+        Wind speed (km/h).
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: (transition time [min], ROS [m/min]).
+    Returns
+    -------
+    tuple[numpy.ndarray, numpy.ndarray]
+        (transition time [min], ROS [m/min]).
     """
     # velocità di base modulata con la densità(tempo di attraversamento)
     dh = dem_to - dem_from
@@ -167,21 +170,29 @@ def p_time_wang(
 ) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """Propagation time and ROS according to Wang et al.
 
-    
-    Args:
-        v0 (np.ndarray): Base ROS vector per vegetation type.
-        dem_from (np.ndarray): Elevation of source cells.
-        dem_to (np.ndarray): Elevation of neighbor cells.
-        veg_from (np.ndarray): Vegetation at source (int, 1-based).
-        veg_to (np.ndarray): Vegetation at neighbor (int, 1-based).
-        angle_to (np.ndarray): Direction to neighbor (radians).
-        dist (np.ndarray): Lattice distance to neighbor (cells).
-        moist (np.ndarray): Moisture values (%).
-        w_dir (np.ndarray): Wind direction (radians).
-        w_speed (np.ndarray): Wind speed (km/h).
+    Parameters
+    ----------
+    v0 : numpy.ndarray
+        Base ROS vector per vegetation type.
+    dem_from, dem_to : numpy.ndarray
+        Elevation at source and neighbor cells.
+    veg_from, veg_to : numpy.ndarray
+        Vegetation types (1-based) at source and neighbor cells.
+    angle_to : numpy.ndarray
+        Direction to neighbor (radians).
+    dist : numpy.ndarray
+        Lattice distance to neighbor (cells).
+    moist : numpy.ndarray
+        Moisture values (%).
+    w_dir : numpy.ndarray
+        Wind direction (radians).
+    w_speed : numpy.ndarray
+        Wind speed (km/h).
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: (transition time [min], ROS [m/min]).
+    Returns
+    -------
+    tuple[numpy.ndarray, numpy.ndarray]
+        (transition time [min], ROS [m/min]).
     """
     # velocità di base modulata con la densità(tempo di attraversamento)
     dh = dem_to - dem_from
@@ -235,20 +246,29 @@ def p_time_standard(
 ) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """Baseline propagation time and ROS with combined wind-slope factor.
 
-    Args:
-        v0 (np.ndarray): Base ROS vector per vegetation type.
-        dem_from (np.ndarray): Elevation of source cells.
-        dem_to (np.ndarray): Elevation of neighbor cells.
-        veg_from (np.ndarray): Vegetation at source (int, 1-based).
-        veg_to (np.ndarray): Vegetation at neighbor (int, 1-based).
-        angle_to (np.ndarray): Direction to neighbor (radians).
-        dist (np.ndarray): Lattice distance to neighbor (cells).
-        moist (np.ndarray): Moisture values (%).
-        w_dir (np.ndarray): Wind direction (radians).
-        w_speed (np.ndarray): Wind speed (km/h).
+    Parameters
+    ----------
+    v0 : numpy.ndarray
+        Base ROS vector per vegetation type.
+    dem_from, dem_to : numpy.ndarray
+        Elevation at source and neighbor cells.
+    veg_from, veg_to : numpy.ndarray
+        Vegetation types (1-based) at source and neighbor cells.
+    angle_to : numpy.ndarray
+        Direction to neighbor (radians).
+    dist : numpy.ndarray
+        Lattice distance to neighbor (cells).
+    moist : numpy.ndarray
+        Moisture values (%).
+    w_dir : numpy.ndarray
+        Wind direction (radians).
+    w_speed : numpy.ndarray
+        Wind speed (km/h).
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: (transition time [min], ROS [m/min]).
+    Returns
+    -------
+    tuple[numpy.ndarray, numpy.ndarray]
+        (transition time [min], ROS [m/min]).
     """
     dh = dem_to - dem_from
     v = v0[veg_from - 1] / 60
@@ -273,8 +293,10 @@ def w_h_effect(
 ) -> npt.NDArray[np.floating]:
     """Combined wind and slope multiplicative factor on ROS.
 
-    Returns:
-       np.ndarray: Dimensionless multiplier applied to base ROS.
+    Returns
+    -------
+    numpy.ndarray
+        Dimensionless multiplier applied to base ROS.
     """
     w_effect_module = A + (D1 * (D2 * np.tanh((w_speed / D3) - D4))) + (w_speed / D5)
     a = (w_effect_module - 1) / 4
@@ -297,9 +319,11 @@ def w_h_effect_on_probability(
 ) -> npt.NDArray[np.floating]:
     """Scale the wind/slope factor for use as probability exponent.
 
-    Returns:
-       np.ndarray: positive factor used as an exponent on the vegetation
-    probability term; values >1 increase spread, <1 decrease it.
+    Returns
+    -------
+    numpy.ndarray
+        Positive factor used as an exponent on the vegetation probability term;
+        values > 1 increase spread, < 1 decrease it.
     """
     w_speed_norm = np.clip(w_speed, 0, 60)
     wh_orig = w_h_effect(angle_to, w_speed_norm, w_dir, dh, dist_to)
@@ -312,11 +336,10 @@ def w_h_effect_on_probability(
 
 def moist_proba_correction_1(moist: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
     """
-    e_m is the moinsture correction to the transition probability p_{i,j}.
-    e_m = f(m), with m the Fine Fuel Moisture Content
-    e_m = -11,507x5 + 22,963x4 - 17,331x3 + 6,598x2 - 1,7211x + 1,0003, where x is moisture / moisture of extintion (Mx).
-    Mx = 0.3
-    (reference: Trucchia et al, Fire 2020 )
+    Moisture correction to the transition probability p_{i,j}.
+
+    Uses a 5th-degree polynomial in x = moist/Mx, with Mx = 0.3
+    (Trucchia et al., Fire 2020).
     """
     Mx = 0.3
     x = np.clip(moist, 0.0, 1.0) / Mx
@@ -334,9 +357,8 @@ def moist_proba_correction_1(moist: npt.NDArray[np.floating]) -> npt.NDArray[np.
 
 def moist_proba_correction_2(moist: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
     """
-    e_m is the moinsture correction to the transition probability p_{i,j}. e_m = f(m), with m the Fine Fuel Moisture Content
-    Old formulation by Baghino, adopted in Trucchia et al, Fire 2020.
-    Here, the parameters come straight from constants.py.
+    Moisture correction to p_{i,j} (older formulation, Baghino; Trucchia et al., 2020).
+    Parameters come from constants.
     """
     p_moist = M1 * moist**3 + M2 * moist**2 + M3 * moist + M4
     return p_moist
@@ -347,7 +369,7 @@ def fire_spotting(
     w_dir: npt.NDArray[np.floating],
     w_speed: npt.NDArray[np.floating],
 ) -> npt.NDArray[np.floating]:
-    """this function evaluates the distance that an ember can reach, by the use of the Alexandridis' formulation"""
+    """Evaluate spotting distance using Alexandridis' formulation."""
     r_n = np.random.normal(
         SPOTTING_RN_MEAN, SPOTTING_RN_STD, size=angle_to.shape
     )  # main thrust of the ember: sampled from a Gaussian Distribution (Alexandridis et al, 2008 and 2011)

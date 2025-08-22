@@ -6,7 +6,7 @@ moisture inputs. Public dataclasses capture boundary conditions, actions,
 summary statistics, and output snapshots suitable for CLI and IO layers.
 """
 
-from typing import Callable, Iterable, Sequence
+from typing import Iterable, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -31,6 +31,7 @@ from propagator.functions import (
     w_h_effect_on_probability,
 )
 from propagator.scheduler import Scheduler
+from propagator.types import PTimeFn, PMoistFn
 
 RNG = np.random.default_rng(12345)
 
@@ -114,8 +115,8 @@ class Propagator:
     do_spotting: bool
 
     # selected simulation functions
-    p_time_fn: Callable[..., tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]]
-    p_moist_fn: Callable[[npt.NDArray[np.floating]], npt.NDArray[np.floating]]
+    p_time_fn: "PTimeFn"
+    p_moist_fn: "PMoistFn"
 
     # scheduler object
     scheduler: Scheduler = field(init=False, default_factory=Scheduler)
@@ -151,8 +152,10 @@ class Propagator:
     def compute_fire_probability(self) -> npt.NDArray[np.floating]:
         """Return mean burn probability across realizations for each cell.
 
-        Returns:
-            np.ndarray: 2D array with values in [0, 1].
+        Returns
+        -------
+        numpy.ndarray
+            2D array with values in [0, 1].
         """
         values = np.mean(self.fire, axis=2)
         return values
@@ -160,8 +163,10 @@ class Propagator:
     def compute_ros_max(self) -> npt.NDArray[np.floating]:
         """Return per-cell maximum Rate of Spread across realizations.
 
-        Returns:
-            np.ndarray: 2D array with max RoS per cell.
+        Returns
+        -------
+        numpy.ndarray
+            2D array with max RoS per cell.
         """
         RoS_max = np.max(self.ros, axis=2)
         return RoS_max
@@ -169,8 +174,10 @@ class Propagator:
     def compute_ros_mean(self) -> npt.NDArray[np.floating]:
         """Return per-cell mean Rate of Spread, ignoring zeros as no-spread.
 
-        Returns:
-            np.ndarray: 2D array with mean RoS per cell.
+        Returns
+        -------
+        numpy.ndarray
+            2D array with mean RoS per cell.
         """
         RoS_m = np.where(self.ros > 0, self.ros, np.nan)
         RoS_mean = np.nanmean(RoS_m, axis=2)
@@ -180,8 +187,10 @@ class Propagator:
     def compute_fireline_int_max(self) -> npt.NDArray[np.floating]:
         """Return per-cell maximum fireline intensity across realizations.
 
-        Returns:
-            np.ndarray: 2D array of max intensity values.
+        Returns
+        -------
+        numpy.ndarray
+            2D array of max intensity values.
         """
         fl_I_max = np.nanmax(self.fireline_int, axis=2)
         return fl_I_max
@@ -189,8 +198,10 @@ class Propagator:
     def compute_fireline_int_mean(self) -> npt.NDArray[np.floating]:
         """Return per-cell mean fireline intensity, ignoring zeros as no-spread.
 
-        Returns:
-            np.ndarray: 2D array of mean intensity values.
+        Returns
+        -------
+        numpy.ndarray
+            2D array of mean intensity values.
         """
         fl_I_m = np.where(self.fireline_int > 0, self.fireline_int, np.nan)
         fl_I_mean = np.nanmean(fl_I_m, axis=2)
@@ -200,11 +211,15 @@ class Propagator:
     def compute_stats(self, values: npt.NDArray[np.floating]) -> PropagatorStats:
         """Compute simple area-based stats and number of active fronts.
 
-        Args:
-            values (np.ndarray): Fire probability map in [0, 1].
+        Parameters
+        ----------
+        values : numpy.ndarray
+            Fire probability map in [0, 1].
 
-        Returns:
-            PropagatorStats: Dataclass with counters and area summaries.
+        Returns
+        -------
+        PropagatorStats
+            Dataclass with counters and area summaries.
         """
         n_active = len(self.scheduler.active().tolist())
         # cell_area = float() * float(self.step_y) / 10000.0
@@ -239,19 +254,27 @@ class Propagator:
         Combines vegetation-to-vegetation base probability with wind/slope
         modulation and moisture attenuation. The output is in [0, 1].
 
-        Args:
-            dem_from (np.ndarray): Elevation of source cells.
-            dem_to (np.ndarray): Elevation of neighbor cells.
-            veg_from (np.ndarray): Vegetation at source (int, 1-based).
-            veg_to (np.ndarray): Vegetation at neighbor (int, 1-based).
-            angle_to (np.ndarray): Direction to neighbor (radians).
-            dist_to (np.ndarray): Lattice distance to neighbor (cells).
-            moist (np.ndarray): Moisture values (%).
-            w_dir (np.ndarray): Wind direction (radians).
-            w_speed (np.ndarray): Wind speed (km/h).
+        Parameters
+        ----------
+        dem_from, dem_to : numpy.ndarray
+            Elevation at source and neighbor cells.
+        veg_from, veg_to : numpy.ndarray
+            Vegetation types (1-based) at source and neighbor cells.
+        angle_to : numpy.ndarray
+            Direction to neighbor (radians).
+        dist_to : numpy.ndarray
+            Lattice distance to neighbor (cells).
+        moist : numpy.ndarray
+            Moisture values (%).
+        w_dir : numpy.ndarray
+            Wind direction (radians).
+        w_speed : numpy.ndarray
+            Wind speed (km/h).
 
-        Returns:
-            np.ndarray: Probability per neighbor in [0, 1].
+        Returns
+        -------
+        numpy.ndarray
+            Probability per neighbor in [0, 1].
         """
         dh = dem_to - dem_from
         alpha_wh = w_h_effect_on_probability(angle_to, w_speed, w_dir, dh, dist_to)
@@ -270,8 +293,10 @@ class Propagator:
     ) -> None:
         """Apply moisture, wind, and ignitions at or after the given time.
 
-        Args:
-            boundary_condition (PropagatorBoundaryConditions): Conditions to apply.
+        Parameters
+        ----------
+        boundary_condition : PropagatorBoundaryConditions
+            Conditions to apply.
         """
         if self.time > boundary_condition.time:
             raise ValueError(
@@ -297,7 +322,7 @@ class Propagator:
                 "Actions cannot be applied in the past. Please check the time of the actions."
             )
 
-        if actions.additional_moisture is not None:
+        if self.actions_moisture is not None and actions.additional_moisture is not None:
             self.actions_moisture += actions.additional_moisture
         if actions.vegetation_changes is not None:
             # mutate vegetation where needed
@@ -316,14 +341,18 @@ class Propagator:
     ]:
         """Compute ember landing cells and their transition times (if enabled).
 
-        Args:
-            veg_type (np.ndarray): Vegetation type at updated cells.
-            update (np.ndarray): Updates as stacked rows [r, c, t].
+        Parameters
+        ----------
+        veg_type : numpy.ndarray
+            Vegetation type at updated cells.
+        update : numpy.ndarray
+            Updates as stacked rows [r, c, t].
 
-        Returns:
-            tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-                Row indices, col indices, realization indices, and transition
-                times for spotted ignitions.
+        Returns
+        -------
+        tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray]
+            Row indices, col indices, realization indices, and transition
+            times for spotted ignitions.
         """
         moisture = self.get_moisture()
         # only cells that have veg = fire-prone conifers are selected
@@ -419,13 +448,15 @@ class Propagator:
     ) -> list[tuple[float, npt.NDArray[np.integer]]]:
         """Apply a batch of burning updates and schedule new ones.
 
-        Args:
-            updates (list[np.ndarray] | np.ndarray): Coordinates to activate as
-                burning, each as [row, col, realization].
+        Parameters
+        ----------
+        updates : list[numpy.ndarray] | numpy.ndarray
+            Coordinates to activate as burning, each as [row, col, realization].
 
-        Returns:
-            list[tuple[float, np.ndarray]]: Pairs of (time, array[n,3]) for
-            future updates to schedule.
+        Returns
+        -------
+        list[tuple[float, numpy.ndarray]]
+            Pairs of (time, array[n, 3]) for future updates to schedule.
         """
         moisture = self.get_moisture()
 
