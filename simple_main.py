@@ -4,7 +4,7 @@ import numpy as np
 # from propagator.geo import GeographicInfo
 # from propagator.loader.tiles import PropagatorDataFromTiles
 from propagator.functions import moist_proba_correction_1, p_time_wang
-from propagator.loader.geotiff import PropagatorDataFromGeotiffs
+from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
 from propagator.propagator import (
     Propagator,
     PropagatorActions,
