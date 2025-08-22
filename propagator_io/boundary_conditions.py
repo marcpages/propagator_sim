@@ -3,7 +3,7 @@ from typing import List, Optional
 import numpy as np
 from pydantic import (BaseModel, ConfigDict, Field, field_validator)
 
-from propagator_io.geometry import Geometry, GeoLine, _coerce_geometry_list
+from propagator_io.geometry import Geometry, GeoLine, parse_geometry_list
 
 # ---- project utils ----------------------------------------------------------
 from propagator.utils import normalize
@@ -65,13 +65,11 @@ class BoundaryConditionsInput(BaseModel):
                      "helicopter", "heavy_action",
                      mode="before")
     @classmethod
-    def _coerce_lines(cls, v, info):
-        return _coerce_geometry_list(v, allowed={"line"},
-                                     field_name=info.field_name)
+    def _coerce_lines(cls, v):
+        return parse_geometry_list(v, allowed={"line"})
 
     @field_validator("ignitions", mode="before")
     @classmethod
     def _coerce_perstep_ignitions(cls, v):
-        return _coerce_geometry_list(v,
-                                     allowed={"point", "line", "polygon"},
-                                     field_name="ignitions")
+        return parse_geometry_list(v,
+                                   allowed={"point", "line", "polygon"})

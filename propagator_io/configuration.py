@@ -10,7 +10,7 @@ from pydantic import (BaseModel, Field,
 from propagator.functions import get_p_moist_fn, get_p_time_fn
 
 from propagator_io.boundary_conditions import BoundaryConditionsInput
-from propagator_io.geometry import _coerce_geometry_list, Geometry
+from propagator_io.geometry import parse_geometry_list, Geometry
 
 
 class PropagatorConfigurationLegacy(BaseModel):
@@ -113,8 +113,7 @@ class PropagatorConfigurationLegacy(BaseModel):
     @classmethod
     def _coerce_top_ignitions(cls, v: None | List[str]
                               ) -> Optional[List[Geometry]]:
-        return _coerce_geometry_list(v, allowed={"point", "line", "polygon"},
-                                     field_name="ignitions")
+        return parse_geometry_list(v, allowed={"point", "line", "polygon"})
 
     # ---------- cross-field checks & friendly console messages ----------
     @model_validator(mode="after")
