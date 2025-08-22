@@ -10,9 +10,12 @@ from pydantic import (BaseModel, Field,
 from propagator.functions import get_p_moist_fn, get_p_time_fn
 
 from propagator_io.boundary_conditions import BoundaryConditionsInput
-from propagator_io.geometry import _coerce_geometry_list, Geometry
+from propagator_io.geometry import (
+    GeometryParser, Geometry, DEFAULT_EPSG_GEOMETRY
+)
 
 
+# ---- configuration ----------------------------------------------------------
 class PropagatorConfigurationLegacy(BaseModel):
     """Propagator configuration"""
 
@@ -57,7 +60,7 @@ class PropagatorConfigurationLegacy(BaseModel):
         description="Simulation limit [minutes]"
     )
     epsg: int = Field(
-        4326,
+        DEFAULT_EPSG_GEOMETRY,  # default to WGS84
         description="EPSG of geometries"
     )
     ignitions: Optional[List[Geometry]] = Field(
@@ -109,12 +112,30 @@ class PropagatorConfigurationLegacy(BaseModel):
         raise TypeError(f"init_date must be a datetime or string, \
             got {type(v).__name__}")
 
-    @field_validator("ignitions", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def _coerce_top_ignitions(cls, v: None | List[str]
-                              ) -> Optional[List[Geometry]]:
-        return _coerce_geometry_list(v, allowed={"point", "line", "polygon"},
-                                     field_name="ignitions")
+    def _normalize_and_parse_geoms(cls, data: dict):
+        if not isinstance(data, dict):
+            return data
+        # get epsg
+        epsg = data.get("epsg", DEFAULT_EPSG_GEOMETRY)
+
+        # 2) top-level ignitions (strings -> Geometry w/ epsg)
+        if "ignitions" in data:
+            data["ignitions"] = GeometryParser.parse_geometry_list(
+                                    data["ignitions"],
+                                    allowed={"point", "line", "polygon"},
+                                    epsg=epsg)
+
+        # 3) nested ignitions inside boundary_conditions[*]
+        bcs = data.get("boundary_conditions")
+        if isinstance(bcs, list):
+            data["boundary_conditions"] = [
+                BoundaryConditionsInput.model_validate(bc,
+                                                       context={"epsg": epsg})
+                for bc in bcs
+            ]
+        return data
 
     # ---------- cross-field checks & friendly console messages ----------
     @model_validator(mode="after")
