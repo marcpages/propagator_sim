@@ -116,26 +116,26 @@ class Propagator:
                 self.fire[p[0], p[1], t] = 0
 
     def compute_fire_probability(self) -> np.ndarray:
-        values = np.nanmean(self.fire, 2)
+        values = np.mean(self.fire, axis=2)
         return values
 
     def compute_ros_max(self) -> np.ndarray:
-        RoS_max = np.nanmax(self.ros, 2)
+        RoS_max = np.max(self.ros, axis=2)
         return RoS_max
 
     def compute_ros_mean(self) -> np.ndarray:
         RoS_m = np.where(self.ros > 0, self.ros, np.nan)
-        RoS_mean = np.nanmean(RoS_m, 2)
+        RoS_mean = np.nanmean(RoS_m, axis=2)
         RoS_mean = np.where(RoS_mean > 0, RoS_mean, 0)
         return RoS_mean
 
     def compute_fireline_int_max(self) -> np.ndarray:
-        fl_I_max = np.nanmax(self.fireline_int, 2)
+        fl_I_max = np.nanmax(self.fireline_int, axis=2)
         return fl_I_max
 
     def compute_fireline_int_mean(self) -> np.ndarray:
         fl_I_m = np.where(self.fireline_int > 0, self.fireline_int, np.nan)
-        fl_I_mean = np.nanmean(fl_I_m, 2)
+        fl_I_mean = np.nanmean(fl_I_m, axis=2)
         fl_I_mean = np.where(fl_I_mean > 0, fl_I_mean, 0)
         return fl_I_mean
 
@@ -170,6 +170,7 @@ class Propagator:
     ):
         dh = dem_to - dem_from
         alpha_wh = w_h_effect_on_probability(angle_to, w_speed, w_dir, dh, dist_to)
+        alpha_wh = np.maximum(alpha_wh, 0)      # prevent alpha < 0
 
         p_moist = self.p_moist_fn(moist)
         p_moist = np.clip(p_moist, 0, 1.0)
@@ -452,16 +453,18 @@ class Propagator:
             nt = np.append(nt, nt_spot)
             transition_time = np.append(transition_time, transition_time_spot)
 
-        prop_time = np.around(self.time + transition_time, decimals=1)
+        TICK_PRECISION = 10       
+        prop_tick = np.rint((self.time + transition_time) * TICK_PRECISION)
 
-        def extract_updates(t):
-            idx = np.nonzero(prop_time == t)
+        def extract_updates(tick: np.int64):
+            #idx = np.nonzero(prop_time == t)
+            idx = np.nonzero(prop_tick == tick)
             stacked = np.stack((rows_to[idx], cols_to[idx], nt[idx]), axis=1)
             return stacked
 
         # schedule the new updates
-        unique_time = sorted(np.unique(prop_time))
-        new_updates = list(map(lambda t: (t, extract_updates(t)), unique_time))
+        unique_ticks = np.unique(prop_tick)
+        new_updates = list(map(lambda t: (float(t/TICK_PRECISION), extract_updates(t)), unique_ticks))
 
         return new_updates
 
@@ -473,9 +476,9 @@ class Propagator:
         """
         if self.actions_moisture is None:
             return
-        self.actions_moisture = np.clip(
-            self.actions_moisture - self.actions_moisture * decay_factor, 0, None
-        )
+        k = np.clip(decay_factor, 0, 1)
+        self.actions_moisture *= (1 - k) ** max(time_delta, 0)        
+
 
     def get_moisture(self) -> np.ndarray:
         """
