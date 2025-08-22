@@ -45,7 +45,7 @@ class Scheduler:
     def __len__(self):
         return len(self.list)
 
-    def next_time(self):
+    def next_time(self) -> int | None:
         """
         get the next time step
         :return:
@@ -54,7 +54,7 @@ class Scheduler:
             return None
 
         next_time, _next_updates = self.list.peekitem(index=0)
-        return next_time
+        return next_time # type: ignore
 
     def __call__(self):
         while len(self) > 0:

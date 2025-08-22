@@ -1,3 +1,4 @@
+from typing import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -81,23 +82,21 @@ class Propagator:
     do_spotting: bool
 
     # selected simulation functions
-    p_time_fn: callable
-    p_moist_fn: callable
+    p_time_fn: Callable
+    p_moist_fn: Callable
 
     # scheduler object
     scheduler: Scheduler = field(init=False, default_factory=Scheduler)
 
     # simulation state
     time: int = field(init=False, default=0)
-    fire: np.ndarray = field(init=False, default=None)
-    ros: np.ndarray = field(init=False, default=None)
-    fireline_int: np.ndarray = field(init=False, default=None)
-    moisture: np.ndarray = field(init=False, default=None)
-    wind_dir: np.ndarray = field(init=False, default=None)
-    wind_speed: np.ndarray = field(init=False, default=None)
-    actions_moisture: np.ndarray = field(
-        init=False, default=None
-    )  # additional moisture due to fighting actions (ideally it should decay over time)
+    fire: np.ndarray = field(init=False)
+    ros: np.ndarray = field(init=False)
+    fireline_int: np.ndarray = field(init=False)
+    moisture: np.ndarray = field(init=False)
+    wind_dir: np.ndarray = field(init=False)
+    wind_speed: np.ndarray = field(init=False)
+    actions_moisture: np.ndarray = field(init=False)  # additional moisture due to fighting actions (ideally it should decay over time)
 
     def __post_init__(self):
         shape = self.veg.shape
@@ -234,7 +233,7 @@ class Propagator:
         conifer_arr_t = conifer_t.repeat(repeats=num_embers)
         # calculate angle and distance
         ember_angle = RNG.uniform(0, 2.0 * np.pi, size=conifer_arr_r.shape)
-        ember_distance = fire_spotting(ember_angle, self.w_dir, self.w_speed)
+        ember_distance = fire_spotting(ember_angle, self.wind_dir, self.wind_speed)
 
         # filter out short embers
         idx_long_embers = ember_distance > 2 * CELLSIZE
@@ -298,8 +297,8 @@ class Propagator:
             np.zeros(nr_spot.shape),
             CELLSIZE * np.ones(nr_spot.shape),
             moisture[nr_spot, nc_spot],
-            self.w_dir,
-            self.w_speed,
+            self.wind_dir,
+            self.wind_speed,
         )
 
         return nr_spot, nc_spot, nt_spot, transition_time_spot
