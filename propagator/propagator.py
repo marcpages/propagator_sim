@@ -56,7 +56,7 @@ class PropagatorStats:
 
 
 @dataclass(frozen=True)
-class PropagatoOutput:
+class PropagatorOutput:
     time: int
     fire_probability: np.ndarray | None
     ros_mean: np.ndarray | None
@@ -499,7 +499,7 @@ class Propagator:
         new_updates = self.apply_updates(updates)
         self.scheduler.push_all(new_updates)
 
-    def get_output(self) -> PropagatoOutput:
+    def get_output(self) -> PropagatorOutput:
         fire_probability = self.compute_fire_probability()
         ros_max = self.compute_ros_max()
         ros_mean = self.compute_ros_mean()
@@ -507,7 +507,7 @@ class Propagator:
         fireline_intensity_mean = self.compute_fireline_int_mean()
         stats = self.compute_stats(fire_probability)
 
-        return PropagatoOutput(
+        return PropagatorOutput(
             time=self.time,
             fire_probability=fire_probability,
             ros_mean=ros_mean,

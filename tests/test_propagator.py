@@ -7,7 +7,7 @@ from propagator.propagator import (
     PropagatorBoundaryConditions,
     PropagatorActions,
     PropagatorStats,
-    PropagatoOutput,
+    PropagatorOutput,
     PropagatorError,
 )
 from propagator.scheduler import Scheduler
@@ -585,7 +585,7 @@ def test_get_output(sample_propagator):
     
     output = prop.get_output()
 
-    assert isinstance(output, PropagatoOutput)
+    assert isinstance(output, PropagatorOutput)
     assert output.time == 5
 
     assert np.allclose(output.fire_probability, prop.compute_fire_probability())                            # type: ignore
