@@ -1,13 +1,14 @@
-from __future__ import annotations
-
-from typing import Optional, Literal
-from pathlib import Path
 import json
-from pydantic import (Field, field_validator)
+from datetime import datetime
+from pathlib import Path
+from typing import Literal, Optional
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# ---- project utils ----------------------------------------------------------
 from propagator_io.configuration import PropagatorConfigurationLegacy
+
+from .console import info_msg, ok_msg, setup_console
 
 
 # --- CLI configuration -------------------------------------------------------
@@ -61,3 +62,32 @@ class PropagatorCLILegacy(BaseSettings):
         # CLI values override JSON if both are provided
         return PropagatorConfigurationLegacy(**json_cfg,
                                              **self.model_dump())
+
+
+
+def main():
+    simulation_time = datetime.now()
+
+    info_msg("Initializing CLI...")
+    cli = PropagatorCLILegacy() # type: ignore
+    ok_msg("CLI initialized")
+
+    if cli.record:
+        basename = f"propagator_run_{simulation_time.strftime('%Y%m%d_%H%M%S')}"
+        setup_console(
+            record_path=cli.output,
+            basename=basename
+        )
+    else:
+        setup_console()
+    ok_msg("Console initialized")
+
+    info_msg("Loading configuration from JSON file...")
+    cfg = cli.build_configuration()
+    ok_msg("Configuration loaded")
+    print(cfg.model_dump_json(indent=2))
+
+
+# %%
+if __name__ == "__main__":
+    main()

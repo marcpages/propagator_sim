@@ -45,3 +45,6 @@ pythonpath = ["src", ]
 testpaths = [
     "tests",
 ]
+
+[project.scripts] 
+propagator = "propagator_cli.cli:main"
