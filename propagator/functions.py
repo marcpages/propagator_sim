@@ -5,36 +5,36 @@ modulators for wind/slope/moisture, fire spotting distance, and fireline
 intensity utilities used by the core propagator.
 """
 
-import os
-from typing import Callable, Optional
+from typing import Optional
+
 import numpy as np
 import numpy.typing as npt
 
 from propagator.constants import (
+    C_MOIST,
+    CELLSIZE,
     D1,
     D2,
     D3,
     D4,
     D5,
+    FIRE_SPOTTING_DISTANCE_COEFFICIENT,
     M1,
     M2,
     M3,
     M4,
-    A,
-    Q,
     ROTHERMEL_ALPHA1,
     ROTHERMEL_ALPHA2,
+    SPOTTING_RN_MEAN,
+    SPOTTING_RN_STD,
     WANG_BETA1,
     WANG_BETA2,
     WANG_BETA3,
-    FIRE_SPOTTING_DISTANCE_COEFFICIENT,
-    C_MOIST,
-    CELLSIZE,
-    SPOTTING_RN_MEAN,
-    SPOTTING_RN_STD,
+    A,
+    Q,
 )
+from propagator.types import PMoistFn, PTimeFn
 from propagator.utils import normalize
-from propagator.types import PTimeFn, PMoistFn
 
 
 def load_parameters(

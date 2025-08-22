@@ -6,8 +6,8 @@ moisture inputs. Public dataclasses capture boundary conditions, actions,
 summary statistics, and output snapshots suitable for CLI and IO layers.
 """
 
-from typing import Iterable, Sequence
 from dataclasses import dataclass, field
+from typing import List
 
 import numpy as np
 import numpy.typing as npt
@@ -22,7 +22,6 @@ from propagator.constants import (
     P_C0,
     P_CD_CONIFER,
 )
-
 from propagator.functions import (
     fire_spotting,
     fireline_intensity,
@@ -31,7 +30,7 @@ from propagator.functions import (
     w_h_effect_on_probability,
 )
 from propagator.scheduler import Scheduler
-from propagator.types import PTimeFn, PMoistFn
+from propagator.types import PMoistFn, PTimeFn
 
 RNG = np.random.default_rng(12345)
 
@@ -444,8 +443,8 @@ class Propagator:
         return nr_spot, nc_spot, nt_spot, transition_time_spot
 
     def apply_updates(
-        self, updates: Sequence[npt.NDArray[np.integer]] | npt.NDArray[np.integer]
-    ) -> list[tuple[float, npt.NDArray[np.integer]]]:
+        self, updates: List[npt.NDArray[np.integer]]
+    ) -> list[tuple[int, npt.NDArray[np.integer]]]:
         """Apply a batch of burning updates and schedule new ones.
 
         Parameters
@@ -617,7 +616,7 @@ class Propagator:
 
         # schedule the new updates
         unique_ticks = np.unique(prop_tick)
-        new_updates = list(map(lambda t: (float(t/TICK_PRECISION), extract_updates(t)), unique_ticks))
+        new_updates = list(map(lambda t: (int(t/TICK_PRECISION), extract_updates(t)), unique_ticks))
 
         return new_updates
 

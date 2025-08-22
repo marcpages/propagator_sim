@@ -69,13 +69,13 @@ class Scheduler:
         """Number of distinct scheduled time keys."""
         return len(self.list)
 
-    def next_time(self) -> int | float | None:
+    def next_time(self) -> int | None:
         """
         Return the earliest scheduled time without mutating the queue.
 
         Returns
         -------
-        int | float | None
+        int | None
             Earliest time or None if empty.
         """
         if len(self) == 0:

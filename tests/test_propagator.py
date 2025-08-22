@@ -8,7 +8,6 @@ from propagator.propagator import (
     PropagatorActions,
     PropagatorStats,
     PropagatorOutput,
-    PropagatorError,
 )
 from propagator.scheduler import Scheduler
 
