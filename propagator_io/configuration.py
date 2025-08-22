@@ -10,9 +10,12 @@ from pydantic import (BaseModel, Field,
 from propagator.functions import get_p_moist_fn, get_p_time_fn
 
 from propagator_io.boundary_conditions import BoundaryConditionsInput
-from propagator_io.geometry import parse_geometry_list, Geometry
+from propagator_io.geometry import (
+    GeometryParser, Geometry, DEFAULT_EPSG_GEOMETRY
+)
 
 
+# ---- configuration ----------------------------------------------------------
 class PropagatorConfigurationLegacy(BaseModel):
     """Propagator configuration"""
 
@@ -57,7 +60,7 @@ class PropagatorConfigurationLegacy(BaseModel):
         description="Simulation limit [minutes]"
     )
     epsg: int = Field(
-        4326,
+        DEFAULT_EPSG_GEOMETRY,  # default to WGS84
         description="EPSG of geometries"
     )
     ignitions: Optional[List[Geometry]] = Field(
@@ -109,11 +112,55 @@ class PropagatorConfigurationLegacy(BaseModel):
         raise TypeError(f"init_date must be a datetime or string, \
             got {type(v).__name__}")
 
-    @field_validator("ignitions", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def _coerce_top_ignitions(cls, v: None | List[str]
-                              ) -> Optional[List[Geometry]]:
-        return parse_geometry_list(v, allowed={"point", "line", "polygon"})
+    def _normalize_and_parse_geoms(cls, data: dict):
+        if not isinstance(data, dict):
+            return data
+        # get epsg
+        epsg = data.get("epsg", DEFAULT_EPSG_GEOMETRY)
+
+        # 2) top-level ignitions (strings -> Geometry w/ epsg)
+        if "ignitions" in data:
+            data["ignitions"] = GeometryParser.parse_geometry_list(
+                                    data["ignitions"],
+                                    allowed={"point", "line", "polygon"},
+                                    epsg=epsg)
+
+        # 3) nested ignitions inside boundary_conditions[*]
+        bcs = data.get("boundary_conditions")
+        if isinstance(bcs, list):
+            for i, bc in enumerate(bcs):
+                if "ignitions" in bc:
+                    bc["ignitions"] = GeometryParser.parse_geometry_list(
+                                        bc["ignitions"],
+                                        allowed={"point", "line", "polygon"},
+                                        epsg=epsg)
+                # firefighting actions
+                if "waterline_action" in bc:
+                    bc["waterline_action"] = \
+                        GeometryParser.parse_geometry_list(
+                                        bc["waterline_action"],
+                                        allowed={"line"},
+                                        epsg=epsg)
+                if "canadair" in bc:
+                    bc["canadair"] = GeometryParser.parse_geometry_list(
+                                        bc["canadair"],
+                                        allowed={"line"},
+                                        epsg=epsg)
+                if "helicopter" in bc:
+                    bc["helicopter"] = GeometryParser.parse_geometry_list(
+                                        bc["helicopter"],
+                                        allowed={"line"},
+                                        epsg=epsg)
+                if "heavy_action" in bc:
+                    bc["heavy_action"] = GeometryParser.parse_geometry_list(
+                                        bc["heavy_action"],
+                                        allowed={"line"},
+                                        epsg=epsg)
+            # substitute the list
+            data["boundary_conditions"] = bcs
+        return data
 
     # ---------- cross-field checks & friendly console messages ----------
     @model_validator(mode="after")

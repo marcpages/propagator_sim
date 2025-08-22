@@ -4,7 +4,7 @@ from typing import List, Optional, Union, Any, Sequence
 import re
 import math
 from enum import Enum
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator, field_validator
 from typing import Tuple
 import numpy as np
 from pyproj import CRS, Transformer
@@ -35,16 +35,66 @@ class GeometryBase(BaseModel):
     xs: np.ndarray
     crs: CRS = CRS.from_epsg(4326)  # default to WGS84
 
+    # Coerce xs/ys to 1D float arrays
+    @field_validator("xs", "ys", mode="before")
+    @classmethod
+    def _coerce_array(cls, v):
+        arr = np.asarray(v, dtype=float)
+        if arr.ndim != 1:
+            raise ValueError("xs/ys must be 1D sequences")
+        return arr
+
+    # Coerce CRS from int/str/etc.
+    @field_validator("crs", mode="before")
+    @classmethod
+    def _coerce_crs(cls, v):
+        return v if isinstance(v, CRS) else CRS.from_user_input(v)
+
     @model_validator(mode="before")
     @classmethod
-    def _check_geometry(cls, data: dict) -> dict:
-        if len(data["xs"]) != len(data["ys"]):
-            raise ValueError("coordinates must have the same length")
+    def _check_geometry(cls, data):
+        if not isinstance(data, dict):
+            return data
+        xs = data.get("xs")
+        ys = data.get("ys")
+        if xs is not None and ys is not None:
+            # don’t assume arrays yet; just check lengths
+            if len(xs) != len(ys):
+                raise ValueError("coordinates must have the same length")
         return data
 
-    # to be implemented by subclasses: returns (xs, ys)
     def _x_y(self) -> Tuple[np.ndarray, np.ndarray]:
         return self.xs, self.ys
+
+    def _reproject_x_y(self, dst_crs: CRS) -> Tuple[np.ndarray, np.ndarray]:
+        tfm = Transformer.from_crs(self.crs, dst_crs, always_xy=True)
+        xs, ys = self._x_y()
+        X, Y = tfm.transform(xs, ys)
+        return X, Y
+
+    def _shape_rasterize(
+        self,
+        dst_crs: Optional[CRS] = None,
+    ) -> dict:
+        xs, ys = self._x_y()
+        # reproject if needed
+        if dst_crs is not None:
+            if self.crs != dst_crs:
+                xs, ys = self._reproject_x_y(dst_crs)
+        # convert to pure Python lists of [x, y]
+        coords = [[float(x), float(y)]
+                  for x, y in zip(xs.tolist(), ys.tolist())]
+        if self.kind == GeometryKind.POINT:
+            # GeoJSON point: [x, y]
+            return {"type": "Point", "coordinates": coords[0]}
+        if self.kind == GeometryKind.LINE:
+            # GeoJSON line: [[x, y], ...]
+            return {"type": "LineString", "coordinates": coords}
+        if self.kind == GeometryKind.POLYGON:
+            # GeoJSON polygon: [ exterior_ring, hole1, ... ]
+            # 'coords' should already be a closed ring per your validator
+            return {"type": "Polygon", "coordinates": [coords]}
+        raise ValueError(f"Unsupported geometry kind: {self.kind}")
 
 
 class GeoPoint(GeometryBase):
@@ -79,9 +129,7 @@ class GeoPolygon(GeometryBase):
 # super-class for all geometry types
 Geometry = Union[GeoPoint, GeoLine, GeoPolygon]
 
-
-# --- geometry parsing ----
-
+# ---- parsing ---------------------------------------------------------------
 _POINT_RE = re.compile(
     r"""^POINT:\[\s*
         (?P<y>-?\d+(?:\.\d+)?)\s*;\s*
@@ -104,120 +152,67 @@ def _split_floats(s: str) -> List[float]:
     return [float(x) for x in s.strip().split() if x.strip()]
 
 
-def parse_geometry_string(s: str, epsg: int) -> Geometry:
-    """Parse POINT/LINE/POLYGON strings into geometry objects (with CRS)."""
-    s = s.strip()
-    crs = CRS.from_epsg(epsg)
-    m_pt = _POINT_RE.match(s)
-    if m_pt:
-        y = float(m_pt.group("y"))
-        x = float(m_pt.group("x"))
-        return GeoPoint(
-            ys=np.asarray([y], dtype=float),
-            xs=np.asarray([x], dtype=float),
-            crs=crs,
-        )
-    m_series = _SERIES_RE.match(s)
-    if m_series:
-        kind = m_series.group("kind").upper()
-        ys_list = _split_floats(m_series.group("ys"))
-        xs_list = _split_floats(m_series.group("xs"))
-        if len(ys_list) != len(xs_list):
-            raise ValueError(f"{kind}: y/x counts differ \
-                ({len(ys_list)} vs {len(xs_list)})")
-        ys_arr = np.asarray(ys_list, dtype=float)
-        xs_arr = np.asarray(xs_list, dtype=float)
-        if kind == "LINE":
-            return GeoLine(ys=ys_arr, xs=xs_arr, crs=crs)
-        elif kind == "POLYGON":
-            return GeoPolygon(ys=ys_arr, xs=xs_arr, crs=crs)
-        else:
-            raise ValueError(f"Unsupported geometry kind: {kind!r}")
-    raise ValueError(f"Unsupported geometry string: {s!r}")
-
-
-def parse_geometry_list(v: Any, allowed: set[str],
-                        epsg: int) -> Optional[List[Geometry]]:
-    if v is None:
-        return None
-    if not isinstance(v, list):
-        raise ValueError("expected a list")
-    out: List[Geometry] = []
-    for item in v:
-        if isinstance(item, str):
-            g = parse_geometry_string(item, epsg)
-        elif isinstance(item, dict) and "kind" in item:
-            k = str(item["kind"]).lower()
-            if k == "point":
-                g = GeoPoint(**item)
-            elif k == "line":
-                g = GeoLine(**item)
-            elif k == "polygon":
-                g = GeoPolygon(**item)
+class GeometryParser:
+    @staticmethod
+    def parse_geometry_string(s: str, epsg: int) -> Geometry:
+        """Parse POINT/LINE/POLYGON strings into geometry objects."""
+        s = s.strip()
+        crs = CRS.from_epsg(epsg)
+        m_pt = _POINT_RE.match(s)
+        if m_pt:
+            y = float(m_pt.group("y"))
+            x = float(m_pt.group("x"))
+            return GeoPoint(
+                ys=np.asarray([y], dtype=float),
+                xs=np.asarray([x], dtype=float),
+                crs=crs,
+            )
+        m_series = _SERIES_RE.match(s)
+        if m_series:
+            kind = m_series.group("kind").upper()
+            ys_arr = np.asarray(_split_floats(m_series.group("ys")),
+                                dtype=float)
+            xs_arr = np.asarray(_split_floats(m_series.group("xs")),
+                                dtype=float)
+            if ys_arr.size != xs_arr.size:
+                raise ValueError(f"{kind}: y/x counts differ \
+                    ({ys_arr.size} vs {xs_arr.size})")
+            if kind == "LINE":
+                return GeoLine(ys=ys_arr, xs=xs_arr, crs=crs)
+            elif kind == "POLYGON":
+                return GeoPolygon(ys=ys_arr, xs=xs_arr, crs=crs)
             else:
-                raise ValueError(f"\
-                    unsupported kind {item['kind']!r}")
-        else:
-            raise ValueError(f"unsupported entry {item!r}")
-        # check on allowed geometry types
-        if g.__class__ is GeoPoint and "point" not in allowed:
-            raise ValueError("POINT not allowed")
-        if g.__class__ is GeoLine and "line" not in allowed:
-            raise ValueError("LINE not allowed")
-        if g.__class__ is GeoPolygon and "polygon" not in allowed:
-            raise ValueError("POLYGON not allowed")
-        out.append(g)
-    return out
+                raise ValueError(f"Unsupported geometry kind: {kind!r}")
+        raise ValueError(f"Unsupported geometry string: {s!r}")
+
+    @staticmethod
+    def parse_geometry_list(
+        v: Any,
+        allowed: set[str],
+        epsg: int
+    ) -> Optional[List[Geometry]]:
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            raise ValueError("expected a list")
+        out: List[Geometry] = []
+        for item in v:
+            if isinstance(item, str):
+                g = GeometryParser.parse_geometry_string(item, epsg)
+            else:
+                raise ValueError(f"unsupported entry {item!r}")
+            # allowed-kind check
+            if isinstance(g, GeoPoint) and "point" not in allowed:
+                raise ValueError("POINT not allowed")
+            if isinstance(g, GeoLine) and "line" not in allowed:
+                raise ValueError("LINE not allowed")
+            if isinstance(g, GeoPolygon) and "polygon" not in allowed:
+                raise ValueError("POLYGON not allowed")
+            out.append(g)
+        return out
 
 
 # --- rasterization ---
-
-def _reproject_xy(
-    xs: np.ndarray,
-    ys: np.ndarray,
-    src_crs: CRS,
-    dst_crs: CRS,
-) -> Tuple[np.ndarray, np.ndarray]:
-    tfm = Transformer.from_crs(src_crs, dst_crs, always_xy=True)
-    X, Y = tfm.transform(xs, ys)
-    return X, Y
-
-
-def geometry_to_geojson(
-    g: Geometry,
-    dst_crs: Optional[CRS] = None,
-) -> dict:
-    xs, ys = g._x_y()
-
-    # ensure float arrays
-    if not np.issubdtype(xs.dtype, np.floating):
-        xs = xs.astype(float)
-    if not np.issubdtype(ys.dtype, np.floating):
-        ys = ys.astype(float)
-
-    # reproject if needed
-    if dst_crs is not None:
-        if g.crs != CRS(dst_crs):
-            xs, ys = _reproject_xy(xs, ys, g.crs, dst_crs)
-
-    # convert to pure Python lists of [x, y]
-    coords = [[float(x), float(y)] for x, y in zip(xs.tolist(), ys.tolist())]
-
-    if g.kind == GeometryKind.POINT:
-        # GeoJSON point: [x, y]
-        return {"type": "Point", "coordinates": coords[0]}
-
-    if g.kind == GeometryKind.LINE:
-        # GeoJSON line: [[x, y], ...]
-        return {"type": "LineString", "coordinates": coords}
-
-    if g.kind == GeometryKind.POLYGON:
-        # GeoJSON polygon: [ exterior_ring, hole1, ... ]
-        # 'coords' should already be a closed ring per your validator
-        return {"type": "Polygon", "coordinates": [coords]}
-
-    raise ValueError(f"Unsupported geometry kind: {g.kind}")
-
 
 def rasterize_geometries(
     geometries: Sequence[Geometry],
@@ -238,8 +233,6 @@ def rasterize_geometries(
         Geometry objects in the same CRS `src_crs`.
     geo_info: GeographicInfo
         Geographic information for the output raster.
-    src_crs : CRS
-        CRS of input geometries.
     fill : scalar
         Background value.
     default_value : scalar
@@ -265,10 +258,9 @@ def rasterize_geometries(
     # Prepare shapes in destination CRS
     shapes: List[Tuple[dict, Union[int, float]]] = []
     for i, g in enumerate(geometries):
-        gj = geometry_to_geojson(g, dst_crs=geo_info.prj.crs)
+        gj = g._shape_rasterize(dst_crs=geo_info.prj.crs)
         val = values[i] if values is not None else default_value
         shapes.append((gj, val))
-
     if merge_alg not in {"replace", "add"}:
         raise ValueError("merge_alg must be 'replace' or 'add'")
 
