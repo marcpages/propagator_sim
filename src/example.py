@@ -1,15 +1,27 @@
 import logging
 import numpy as np
 
-# from propagator.geo import GeographicInfo
-# from propagator.loader.tiles import PropagatorDataFromTiles
-from propagator.functions import moist_proba_correction_1, p_time_wang
-from propagator.loader.geotiff import PropagatorDataFromGeotiffs
-from propagator.propagator import (
-    Propagator,
-    PropagatorActions,
-    PropagatorBoundaryConditions,
-)
+try:
+    # from propagator.geo import GeographicInfo
+    # from propagator.loader.tiles import PropagatorDataFromTiles
+    from propagator.functions import moist_proba_correction_1, p_time_wang
+    from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
+    from propagator.propagator import (
+        Propagator,
+        PropagatorActions,
+        PropagatorBoundaryConditions,
+    )
+except ModuleNotFoundError:
+    # Allow running without installing by adding src to path
+    import os, sys
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+    from propagator.functions import moist_proba_correction_1, p_time_wang  # type: ignore
+    from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs  # type: ignore
+    from propagator.propagator import (  # type: ignore
+        Propagator,
+        PropagatorActions,
+        PropagatorBoundaryConditions,
+    )
 # from propagator.settings import PropagatorSettings
 
 from propagator.logging_config import configure_logger

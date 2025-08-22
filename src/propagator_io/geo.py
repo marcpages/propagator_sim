@@ -13,8 +13,8 @@ class GeographicInfo:
     shape: tuple[int, int]
 
     def get_stepx_stepy(self) -> tuple[float, float]:
-        step_x = self.bounds[2] - self.bounds[0] / self.shape[1]
-        step_y = self.bounds[3] - self.bounds[1] / self.shape[0]
+        step_x = (self.bounds[2] - self.bounds[0]) / self.shape[1]
+        step_y = (self.bounds[3] - self.bounds[1]) / self.shape[0]
         return step_x, step_y
 
     @staticmethod

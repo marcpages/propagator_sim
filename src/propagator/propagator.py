@@ -1,6 +1,16 @@
+"""Core wildfire propagation engine.
+
+This module defines the main simulation primitives and the `Propagator` class
+that evolves a fire state over a grid using wind, slope, vegetation, and
+moisture inputs. Public dataclasses capture boundary conditions, actions,
+summary statistics, and output snapshots suitable for CLI and IO layers.
+"""
+
 from dataclasses import dataclass, field
+from typing import List
 
 import numpy as np
+import numpy.typing as npt
 from numpy import tile
 
 from propagator.constants import (
@@ -12,7 +22,6 @@ from propagator.constants import (
     P_C0,
     P_CD_CONIFER,
 )
-
 from propagator.functions import (
     fire_spotting,
     fireline_intensity,
@@ -21,32 +30,51 @@ from propagator.functions import (
     w_h_effect_on_probability,
 )
 from propagator.scheduler import Scheduler
+from propagator.types import PMoistFn, PTimeFn
 
 RNG = np.random.default_rng(12345)
 
 
 class PropagatorError(Exception):
-    pass
+    """Domain-specific error raised by PROPAGATOR."""
 
 
 @dataclass(frozen=True)
 class PropagatorBoundaryConditions:
+    """Boundary conditions applied at or after a given time.
+
+    - time: Simulation time the conditions refer to.
+    - ignitions: Boolean mask of new ignition points (True ignites).
+    - moisture: Fuel moisture map (%), same shape as vegetation.
+    - wind_dir: Wind direction map (radians, mathematical convention).
+    - wind_speed: Wind speed map (km/h).
+    """
+
     time: int
-    ignitions: np.ndarray | None
-    moisture: np.ndarray | None
-    wind_dir: np.ndarray | None
-    wind_speed: np.ndarray | None
+    ignitions: npt.NDArray[np.bool_] | None
+    moisture: npt.NDArray[np.floating] | None
+    wind_dir: npt.NDArray[np.floating] | None
+    wind_speed: npt.NDArray[np.floating] | None
 
 
 @dataclass(frozen=True)
 class PropagatorActions:
+    """Operational actions that modify short-term conditions.
+
+    - time: Simulation time the actions refer to.
+    - additional_moisture: Extra moisture to add to fuel (%), can be sparse.
+    - vegetation_changes: Raster of vegetation type overrides (NaN to skip).
+    """
+
     time: int
-    additional_moisture: np.ndarray | None
-    vegetation_changes: np.ndarray | None
+    additional_moisture: npt.NDArray[np.floating] | None
+    vegetation_changes: npt.NDArray[np.floating] | None
 
 
 @dataclass(frozen=True)
 class PropagatorStats:
+    """Summary statistics for the current simulation state."""
+
     n_active: int
     area_mean: float
     area_50: float
@@ -55,68 +83,69 @@ class PropagatorStats:
 
 
 @dataclass(frozen=True)
-class PropagatoOutput:
+class PropagatorOutput:
+    """Snapshot of simulation outputs at a given time step."""
+
     time: int
-    fire_probability: np.ndarray | None
-    ros_mean: np.ndarray | None
-    ros_max: np.ndarray | None
-    fireline_int_mean: np.ndarray | None
-    fireline_int_max: np.ndarray | None
+    fire_probability: npt.NDArray[np.floating] | None
+    ros_mean: npt.NDArray[np.floating] | None
+    ros_max: npt.NDArray[np.floating] | None
+    fireline_int_mean: npt.NDArray[np.floating] | None
+    fireline_int_max: npt.NDArray[np.floating] | None
     stats: PropagatorStats | None = field(default=None)
 
 
 @dataclass
 class Propagator:
-    """
-    Propagator class for simulating fire spread.
-    This class is responsible for managing the state of the simulation,
-    applying boundary conditions, and performing the fire spread calculations.
-    It uses a scheduler to manage the time steps and updates of the simulation.
-    Attributes:
-        veg (np.ndarray): Vegetation type array.
-        dem (np.ndarray): Digital elevation model array.
-        realizations (int): Number of realizations for the simulation.
-        
+    """Stochastic cellular wildfire spread simulator.
+
+    PROPAGATOR evolves a binary fire state over a regular grid for a
+    configurable number of realizations. Spread depends on vegetation, topography
+    and environmental drivers (wind, moisture) through pluggable probability and
+    travel-time models.
     """
 
+    # domain parameters for the simulation
+
     # input
-    veg: np.ndarray
-    dem: np.ndarray
+    veg: npt.NDArray[np.integer]
+    dem: npt.NDArray[np.floating]
     realizations: int
 
     # simulation parameters
-    ros_0: np.ndarray
-    probability_table: np.ndarray
-    veg_parameters: np.ndarray
+    ros_0: npt.NDArray[np.floating]
+    probability_table: npt.NDArray[np.floating]
+    veg_parameters: npt.NDArray[np.floating]
     do_spotting: bool
 
     # selected simulation functions
-    p_time_fn: callable
-    p_moist_fn: callable
+    p_time_fn: "PTimeFn"
+    p_moist_fn: "PMoistFn"
 
     # scheduler object
     scheduler: Scheduler = field(init=False, default_factory=Scheduler)
 
     # simulation state
     time: int = field(init=False, default=0)
-    fire: np.ndarray = field(init=False, default=None)
-    ros: np.ndarray = field(init=False, default=None)
-    fireline_int: np.ndarray = field(init=False, default=None)
-    moisture: np.ndarray = field(init=False, default=None)
-    wind_dir: np.ndarray = field(init=False, default=None)
-    wind_speed: np.ndarray = field(init=False, default=None)
-    actions_moisture: np.ndarray = field(
-        init=False, default=None
+    fire: npt.NDArray[np.int8] = field(init=False)
+    ros: npt.NDArray[np.float16] = field(init=False)
+    fireline_int: npt.NDArray[np.float16] = field(init=False)
+    moisture: npt.NDArray[np.floating] = field(init=False)
+    wind_dir: npt.NDArray[np.floating] = field(init=False)
+    wind_speed: npt.NDArray[np.floating] = field(init=False)
+    actions_moisture: npt.NDArray[np.floating] | None = field(
+        init=False
     )  # additional moisture due to fighting actions (ideally it should decay over time)
 
     def __post_init__(self):
+        """Allocate internal state arrays based on the vegetation grid shape."""
         shape = self.veg.shape
         self.fire = np.zeros(shape + (self.realizations,), dtype=np.int8)
         self.ros = np.zeros(shape + (self.realizations,), dtype=np.float16)
         self.fireline_int = np.zeros(shape + (self.realizations,), dtype=np.float16)
         self.actions_moisture = np.zeros(shape, dtype=np.float16)
 
-    def set_ignitions(self, ignitions: np.ndarray, time: int) -> None:
+    def set_ignitions(self, ignitions: npt.NDArray[np.bool_], time: int) -> None:
         """
         Apply ignitions to the state of the simulation.
         """
@@ -126,31 +155,78 @@ class Propagator:
                 self.scheduler.push(np.array([p[0], p[1], t]), time=time)
                 self.fire[p[0], p[1], t] = 0
 
-    def compute_fire_probability(self) -> np.ndarray:
-        values = np.nanmean(self.fire, 2)
+    def compute_fire_probability(self) -> npt.NDArray[np.floating]:
+        """Return mean burn probability across realizations for each cell.
+
+        Returns
+        -------
+        numpy.ndarray
+            2D array with values in [0, 1].
+        """
+        values = np.mean(self.fire, axis=2)
         return values
 
-    def compute_ros_max(self) -> np.ndarray:
-        RoS_max = np.nanmax(self.ros, 2)
+    def compute_ros_max(self) -> npt.NDArray[np.floating]:
+        """Return per-cell maximum Rate of Spread across realizations.
+
+        Returns
+        -------
+        numpy.ndarray
+            2D array with max RoS per cell.
+        """
+        RoS_max = np.max(self.ros, axis=2)
         return RoS_max
 
-    def compute_ros_mean(self) -> np.ndarray:
+    def compute_ros_mean(self) -> npt.NDArray[np.floating]:
+        """Return per-cell mean Rate of Spread, ignoring zeros as no-spread.
+
+        Returns
+        -------
+        numpy.ndarray
+            2D array with mean RoS per cell.
+        """
         RoS_m = np.where(self.ros > 0, self.ros, np.nan)
-        RoS_mean = np.nanmean(RoS_m, 2)
+        RoS_mean = np.nanmean(RoS_m, axis=2)
         RoS_mean = np.where(RoS_mean > 0, RoS_mean, 0)
         return RoS_mean
 
-    def compute_fireline_int_max(self) -> np.ndarray:
-        fl_I_max = np.nanmax(self.fireline_int, 2)
+    def compute_fireline_int_max(self) -> npt.NDArray[np.floating]:
+        """Return per-cell maximum fireline intensity across realizations.
+
+        Returns
+        -------
+        numpy.ndarray
+            2D array of max intensity values.
+        """
+        fl_I_max = np.nanmax(self.fireline_int, axis=2)
         return fl_I_max
 
-    def compute_fireline_int_mean(self) -> np.ndarray:
+    def compute_fireline_int_mean(self) -> npt.NDArray[np.floating]:
+        """Return per-cell mean fireline intensity, ignoring zeros as no-spread.
+
+        Returns
+        -------
+        numpy.ndarray
+            2D array of mean intensity values.
+        """
         fl_I_m = np.where(self.fireline_int > 0, self.fireline_int, np.nan)
-        fl_I_mean = np.nanmean(fl_I_m, 2)
+        fl_I_mean = np.nanmean(fl_I_m, axis=2)
         fl_I_mean = np.where(fl_I_mean > 0, fl_I_mean, 0)
         return fl_I_mean
 
-    def compute_stats(self, values) -> PropagatorStats:
+    def compute_stats(self, values: npt.NDArray[np.floating]) -> PropagatorStats:
+        """Compute simple area-based stats and number of active fronts.
+
+        Parameters
+        ----------
+        values : numpy.ndarray
+            Fire probability map in [0, 1].
+
+        Returns
+        -------
+        PropagatorStats
+            Dataclass with counters and area summaries.
+        """
         n_active = len(self.scheduler.active().tolist())
         # cell_area = float() * float(self.step_y) / 10000.0
         cell_area = 1
@@ -169,18 +245,46 @@ class Propagator:
 
     def propagation_probability(
         self,
-        dem_from,
-        dem_to,
-        veg_from,
-        veg_to,
-        angle_to,
-        dist_to,
-        moist,
-        w_dir,
-        w_speed,
-    ):
+        dem_from: npt.NDArray[np.floating],
+        dem_to: npt.NDArray[np.floating],
+        veg_from: npt.NDArray[np.integer],
+        veg_to: npt.NDArray[np.integer],
+        angle_to: npt.NDArray[np.floating],
+        dist_to: npt.NDArray[np.floating],
+        moist: npt.NDArray[np.floating],
+        w_dir: npt.NDArray[np.floating],
+        w_speed: npt.NDArray[np.floating],
+    ) -> npt.NDArray[np.floating]:
+        """Compute spread probability from one cell to a neighbor.
+
+        Combines vegetation-to-vegetation base probability with wind/slope
+        modulation and moisture attenuation. The output is in [0, 1].
+
+        Parameters
+        ----------
+        dem_from, dem_to : numpy.ndarray
+            Elevation at source and neighbor cells.
+        veg_from, veg_to : numpy.ndarray
+            Vegetation types (1-based) at source and neighbor cells.
+        angle_to : numpy.ndarray
+            Direction to neighbor (radians).
+        dist_to : numpy.ndarray
+            Lattice distance to neighbor (cells).
+        moist : numpy.ndarray
+            Moisture values (%).
+        w_dir : numpy.ndarray
+            Wind direction (radians).
+        w_speed : numpy.ndarray
+            Wind speed (km/h).
+
+        Returns
+        -------
+        numpy.ndarray
+            Probability per neighbor in [0, 1].
+        """
         dh = dem_to - dem_from
         alpha_wh = w_h_effect_on_probability(angle_to, w_speed, w_dir, dh, dist_to)
+        alpha_wh = np.maximum(alpha_wh, 0)  # prevent alpha < 0
 
         p_moist = self.p_moist_fn(moist)
         p_moist = np.clip(p_moist, 0, 1.0)
@@ -193,6 +297,13 @@ class Propagator:
     def set_boundary_conditions(
         self, boundary_condition: PropagatorBoundaryConditions
     ) -> None:
+        """Apply moisture, wind, and ignitions at or after the given time.
+
+        Parameters
+        ----------
+        boundary_condition : PropagatorBoundaryConditions
+            Conditions to apply.
+        """
         if self.time > boundary_condition.time:
             raise ValueError(
                 "Boundary conditions cannot be applied in the past. Please check the time of the boundary conditions."
@@ -217,14 +328,41 @@ class Propagator:
                 "Actions cannot be applied in the past. Please check the time of the actions."
             )
 
-        if actions.additional_moisture is not None:
+        if (
+            self.actions_moisture is not None
+            and actions.additional_moisture is not None
+        ):
             self.actions_moisture += actions.additional_moisture
         if actions.vegetation_changes is not None:
             # mutate vegetation where needed
             mask = ~np.isnan(actions.vegetation_changes)
             self.veg[mask] = actions.vegetation_changes[mask]
 
-    def compute_spotting(self, veg_type, update):
+    def compute_spotting(
+        self,
+        veg_type: npt.NDArray[np.integer],
+        update: npt.NDArray[np.integer],
+    ) -> tuple[
+        npt.NDArray[np.integer],
+        npt.NDArray[np.integer],
+        npt.NDArray[np.integer],
+        npt.NDArray[np.floating],
+    ]:
+        """Compute ember landing cells and their transition times (if enabled).
+
+        Parameters
+        ----------
+        veg_type : numpy.ndarray
+            Vegetation type at updated cells.
+        update : numpy.ndarray
+            Updates as stacked rows [r, c, t].
+
+        Returns
+        -------
+        tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray]
+            Row indices, col indices, realization indices, and transition
+            times for spotted ignitions.
+        """
         moisture = self.get_moisture()
         # only cells that have veg = fire-prone conifers are selected
         conifer_mask = veg_type == 5
@@ -244,7 +382,7 @@ class Propagator:
         conifer_arr_t = conifer_t.repeat(repeats=num_embers)
         # calculate angle and distance
         ember_angle = RNG.uniform(0, 2.0 * np.pi, size=conifer_arr_r.shape)
-        ember_distance = fire_spotting(ember_angle, self.w_dir, self.w_speed)
+        ember_distance = fire_spotting(ember_angle, self.wind_dir, self.wind_speed)
 
         # filter out short embers
         idx_long_embers = ember_distance > 2 * CELLSIZE
@@ -308,13 +446,27 @@ class Propagator:
             np.zeros(nr_spot.shape),
             CELLSIZE * np.ones(nr_spot.shape),
             moisture[nr_spot, nc_spot],
-            self.w_dir,
-            self.w_speed,
+            self.wind_dir,
+            self.wind_speed,
         )
 
         return nr_spot, nc_spot, nt_spot, transition_time_spot
 
-    def apply_updates(self, updates):
+    def apply_updates(
+        self, updates: List[npt.NDArray[np.integer]]
+    ) -> list[tuple[int, npt.NDArray[np.integer]]]:
+        """Apply a batch of burning updates and schedule new ones.
+
+        Parameters
+        ----------
+        updates : list[numpy.ndarray] | numpy.ndarray
+            Coordinates to activate as burning, each as [row, col, realization].
+
+        Returns
+        -------
+        list[tuple[float, numpy.ndarray]]
+            Pairs of (time, array[n, 3]) for future updates to schedule.
+        """
         moisture = self.get_moisture()
 
         # coordinates of the next updates
@@ -463,16 +615,20 @@ class Propagator:
             nt = np.append(nt, nt_spot)
             transition_time = np.append(transition_time, transition_time_spot)
 
-        prop_time = np.around(self.time + transition_time, decimals=1)
+        TICK_PRECISION = 10
+        prop_tick = np.rint((self.time + transition_time) * TICK_PRECISION)
 
-        def extract_updates(t):
-            idx = np.nonzero(prop_time == t)
+        def extract_updates(tick: np.int64):
+            # idx = np.nonzero(prop_time == t)
+            idx = np.nonzero(prop_tick == tick)
             stacked = np.stack((rows_to[idx], cols_to[idx], nt[idx]), axis=1)
             return stacked
 
         # schedule the new updates
-        unique_time = sorted(np.unique(prop_time))
-        new_updates = list(map(lambda t: (t, extract_updates(t)), unique_time))
+        unique_ticks = np.unique(prop_tick)
+        new_updates = list(
+            map(lambda t: (int(t / TICK_PRECISION), extract_updates(t)), unique_ticks)
+        )
 
         return new_updates
 
@@ -481,16 +637,23 @@ class Propagator:
     ) -> None:
         """
         Decay the actions moisture over time.
+
+        Args:
+            time_delta (int): Elapsed simulation time since last step.
+            decay_factor (float): Per-unit-time fractional decay in [0, 1].
         """
         if self.actions_moisture is None:
             return
-        self.actions_moisture = np.clip(
-            self.actions_moisture - self.actions_moisture * decay_factor, 0, None
-        )
+        k = np.clip(decay_factor, 0, 1)
+        self.actions_moisture *= (1 - k) ** max(time_delta, 0)
 
-    def get_moisture(self) -> np.ndarray:
+    def get_moisture(self) -> npt.NDArray[np.floating]:
         """
         Get the fuel moisture at the current time step.
+
+        Returns:
+            np.ndarray: Base moisture plus action-derived increments, clipped to
+            [0, 100].
         """
         if self.actions_moisture is None:
             return self.moisture
@@ -503,6 +666,7 @@ class Propagator:
     def step(
         self,
     ) -> None:
+        """Advance the simulation to the next scheduled time and update state."""
         time, updates = self.scheduler.pop()
         time_delta = time - self.time
         self.time = time
@@ -510,7 +674,12 @@ class Propagator:
         new_updates = self.apply_updates(updates)
         self.scheduler.push_all(new_updates)
 
-    def get_output(self) -> PropagatoOutput:
+    def get_output(self) -> PropagatorOutput:
+        """Assemble the current outputs and summary stats into a dataclass.
+
+        Returns:
+            PropagatorOutput: Snapshot of fire probability, RoS, intensity, stats.
+        """
         fire_probability = self.compute_fire_probability()
         ros_max = self.compute_ros_max()
         ros_mean = self.compute_ros_mean()
@@ -518,7 +687,7 @@ class Propagator:
         fireline_intensity_mean = self.compute_fireline_int_mean()
         stats = self.compute_stats(fire_probability)
 
-        return PropagatoOutput(
+        return PropagatorOutput(
             time=self.time,
             fire_probability=fire_probability,
             ros_mean=ros_mean,
@@ -531,6 +700,10 @@ class Propagator:
     def next_time(self) -> int | None:
         """
         Get the next time step.
+
+        Returns:
+            int | None: 0 at initialization; None if no more events; otherwise
+            the next scheduled simulation time.
         """
         if self.time == 0:
             return 0
