@@ -6,7 +6,7 @@ from propagator_io.input import PropagatorDataLoaderException
 
 import logging
 
-from propagator.loader.protocol import PropagatorInputDataProtocol
+from propagator_io.loader.protocol import PropagatorInputDataProtocol
 
 
 def check_input_files_consistency(dem_file, veg_file):

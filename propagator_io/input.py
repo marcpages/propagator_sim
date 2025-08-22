@@ -7,11 +7,12 @@ import numpy as np
 from scipy import ndimage
 import utm
 
-from propagator_IO.geo import GeographicInfo
+from propagator_io.geo import GeographicInfo
 from propagator.propagator import PropagatorError
-from propagator.settings import DEFAULT_TILES_TAG
+
 from propagator.utils import add_point, rasterize_actions, read_actions
 
+DEFAULT_TILES_TAG = 'default'
 
 class PropagatorDataLoaderException(Exception): ...
 
