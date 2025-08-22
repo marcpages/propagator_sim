@@ -1,6 +1,5 @@
 # PROPAGATOR: An Operational Cellular-Automata Based Wildfire Simulator
 
-
 This repository contains the python implementation of the PROPAGATOR wildfire simulation algorithm, developed by CIMA Research Foundation.
 
 Link to the research paper: [PROPAGATOR: An Operational Cellular-Automata Based Wildfire Simulator](https://www.mdpi.com/2571-6255/3/3/26)
