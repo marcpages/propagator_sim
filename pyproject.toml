@@ -11,7 +11,6 @@ dependencies = [
     "numpy>=2.3.2",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
-    "pygame>=2.6.1",
     "pyproj>=3.7.2",
     "rasterio>=1.4.3",
     "rich>=14.1.0",
