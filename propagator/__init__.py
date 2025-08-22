@@ -1,3 +1,5 @@
+"""Package init for the wildfire propagator core."""
+
 import os
 from os.path import join, realpath
 

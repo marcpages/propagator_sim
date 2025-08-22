@@ -23,7 +23,7 @@ def mock_p_moist_fn(moist):
 
 @pytest.fixture
 def sample_propagator():
-    # Define some sample input data for the Propagator
+    # Define some sample input data for PROPAGATOR
     veg = np.array([[1, 2, 0], [3, 4, 1], [0, 5, 2]], dtype=np.int8)
     dem = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]], dtype=np.float32)
     realizations = 2

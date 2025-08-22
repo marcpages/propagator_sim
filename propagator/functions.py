@@ -1,3 +1,10 @@
+"""Spread, probability, and intensity model functions.
+
+This module contains pluggable formulations for rate-of-spread, probability
+modulators for wind/slope/moisture, fire spotting distance, and fireline
+intensity utilities used by the core propagator.
+"""
+
 import os
 import numpy as np
 
@@ -30,11 +37,11 @@ from propagator.utils import (
 
 
 def load_parameters(probability_file=None, v0_file=None, p_vegetation=None):
-    """
-    Override the default values for vegetation speed and probabilities by loading them from file
-    :param probability_file:
-    :param time_file:
-    :return:
+    """Override default vegetation parameters from text files.
+
+    - probability_file: Path to vegetation-to-vegetation probability table.
+    - v0_file: Path to base ROS per vegetation type.
+    - p_vegetation: Path to ignition probabilities per vegetation type.
     """
     global v0, prob_table, p_veg
     if v0_file:
@@ -46,6 +53,11 @@ def load_parameters(probability_file=None, v0_file=None, p_vegetation=None):
 
 
 def get_p_time_fn(ros_model_code):
+    """Select a rate-of-spread model by code.
+
+    Returns a function with signature `(v0, dem_from, dem_to, veg_from, veg_to,
+    angle_to, dist, moist, w_dir, w_speed) -> (time, ros)`.
+    """
     ros_models = {
         "default": p_time_standard,
         "wang": p_time_wang,
@@ -56,6 +68,7 @@ def get_p_time_fn(ros_model_code):
 
 
 def get_p_moist_fn(moist_model_code):
+    """Select a moisture probability correction by code."""
     moist_models = {
         "default": moist_proba_correction_1,
         "new_formulation": moist_proba_correction_1,
@@ -68,6 +81,22 @@ def get_p_moist_fn(moist_model_code):
 def p_time_rothermel(
     dem_from, dem_to, veg_from, veg_to, angle_to, dist, moist, w_dir, w_speed
 ):
+    """Propagation time and ROS according to Rothermel-like scaling.
+
+    Args:
+        dem_from (np.ndarray): Elevation of source cells.
+        dem_to (np.ndarray): Elevation of neighbor cells.
+        veg_from (np.ndarray): Vegetation at source (int, 1-based).
+        veg_to (np.ndarray): Vegetation at neighbor (int, 1-based).
+        angle_to (np.ndarray): Direction to neighbor (radians).
+        dist (np.ndarray): Lattice distance to neighbor (cells).
+        moist (np.ndarray): Moisture values (%).
+        w_dir (np.ndarray): Wind direction (radians).
+        w_speed (np.ndarray): Wind speed (km/h).
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: (transition time [min], ROS [m/min]).
+    """
     # velocità di base modulata con la densità(tempo di attraversamento)
     dh = dem_to - dem_from
 
@@ -109,6 +138,24 @@ def p_time_rothermel(
 def p_time_wang(
     v0, dem_from, dem_to, veg_from, veg_to, angle_to, dist, moist, w_dir, w_speed
 ):
+    """Propagation time and ROS according to Wang et al.
+
+    
+    Args:
+        v0 (np.ndarray): Base ROS vector per vegetation type.
+        dem_from (np.ndarray): Elevation of source cells.
+        dem_to (np.ndarray): Elevation of neighbor cells.
+        veg_from (np.ndarray): Vegetation at source (int, 1-based).
+        veg_to (np.ndarray): Vegetation at neighbor (int, 1-based).
+        angle_to (np.ndarray): Direction to neighbor (radians).
+        dist (np.ndarray): Lattice distance to neighbor (cells).
+        moist (np.ndarray): Moisture values (%).
+        w_dir (np.ndarray): Wind direction (radians).
+        w_speed (np.ndarray): Wind speed (km/h).
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: (transition time [min], ROS [m/min]).
+    """
     # velocità di base modulata con la densità(tempo di attraversamento)
     dh = dem_to - dem_from
 
@@ -150,6 +197,23 @@ def p_time_wang(
 def p_time_standard(
     v0, dem_from, dem_to, veg_from, veg_to, angle_to, dist, moist, w_dir, w_speed
 ):
+    """Baseline propagation time and ROS with combined wind-slope factor.
+
+    Args:
+        v0 (np.ndarray): Base ROS vector per vegetation type.
+        dem_from (np.ndarray): Elevation of source cells.
+        dem_to (np.ndarray): Elevation of neighbor cells.
+        veg_from (np.ndarray): Vegetation at source (int, 1-based).
+        veg_to (np.ndarray): Vegetation at neighbor (int, 1-based).
+        angle_to (np.ndarray): Direction to neighbor (radians).
+        dist (np.ndarray): Lattice distance to neighbor (cells).
+        moist (np.ndarray): Moisture values (%).
+        w_dir (np.ndarray): Wind direction (radians).
+        w_speed (np.ndarray): Wind speed (km/h).
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: (transition time [min], ROS [m/min]).
+    """
     dh = dem_to - dem_from
     v = v0[veg_from - 1] / 60
     wh = w_h_effect(angle_to, w_speed, w_dir, dh, dist)
@@ -165,6 +229,11 @@ def p_time_standard(
 
 
 def w_h_effect(angle_to, w_speed, w_dir, dh, dist):
+    """Combined wind and slope multiplicative factor on ROS.
+
+    Returns:
+       np.ndarray: Dimensionless multiplier applied to base ROS.
+    """
     w_effect_module = A + (D1 * (D2 * np.tanh((w_speed / D3) - D4))) + (w_speed / D5)
     a = (w_effect_module - 1) / 4
     w_effect_on_direction = (
@@ -178,8 +247,11 @@ def w_h_effect(angle_to, w_speed, w_dir, dh, dist):
 
 
 def w_h_effect_on_probability(angle_to, w_speed, w_dir, dh, dist_to):
-    """
-    scales the wh factor for using it on the probability modulation
+    """Scale the wind/slope factor for use as probability exponent.
+
+    Returns:
+       np.ndarray: positive factor used as an exponent on the vegetation
+    probability term; values >1 increase spread, <1 decrease it.
     """
     w_speed_norm = np.clip(w_speed, 0, 60)
     wh_orig = w_h_effect(angle_to, w_speed_norm, w_dir, dh, dist_to)
@@ -239,17 +311,23 @@ def fire_spotting(angle_to, w_dir, w_speed):
 
 
 def lhv_dead_fuel(hhv, dffm):
+    """Lower heating value of dead fuels given higher heating value and FFMC."""
     lhv = hhv * (1.0 - (dffm / 100.0)) - Q * (dffm / 100.0)
     return lhv
 
 
 def lhv_canopy(hhv, hum):
+    """Lower heating value of canopy fuels given humidity (percent)."""
     lhv = hhv * (1.0 - (hum / 100.0)) - Q * (hum / 100.0)
     lhv[np.isnan(lhv)] = 0
     return lhv
 
 
 def fireline_intensity(d0, d1, ros, lhv_dead_fuel, lhv_canopy, rg=None):
+    """Estimate fireline intensity (kW/m) from fuel loads and ROS.
+
+    Supports an optional `rg` fraction to blend surface/canopy contributions.
+    """
     intensity = np.full(ros.shape[0], np.nan, dtype="float32")
     if rg is not None:
         rg_idx = ~np.isnan(rg)

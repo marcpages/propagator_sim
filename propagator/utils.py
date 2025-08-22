@@ -1,3 +1,5 @@
+"""Utility helpers for raster/vector IO and small geometry ops."""
+
 import fiona
 import numpy as np
 import rasterio as rio
@@ -12,16 +14,27 @@ from shapely.geometry import LineString, MultiLineString, mapping, shape
 
 
 def normalize(angle_to_norm):
+    """Normalize an angle to the interval [-pi, pi)."""
     return (angle_to_norm + pi) % (2 * pi) - pi
 
 
 def add_point(img, c, r, val):
+    """Set a single pixel to `val` if inside bounds.
+
+    Returns the list with the written coordinate `(r, c)` when in-bounds, or
+    still returns the attempted coordinate for consistency.
+    """
     if 0 <= c < img.shape[1] and 0 <= r < img.shape[0]:
         img[r, c] = val
     return [(r, c)]
 
 
 def add_segment(img, c0, r0, c1, r1, value):
+    """Rasterize a discrete line segment using Bresenham and write `value`.
+
+    Returns the list of `(r, c)` points touched along the segment.
+    Coordinates are expressed as column-first (`c`) and row (`r`).
+    """
     dc = abs(c1 - c0)
     dr = abs(r1 - r0)
     if c0 < c1:
@@ -57,6 +70,11 @@ def add_segment(img, c0, r0, c1, r1, value):
 
 
 def add_line(img, cs, rs, val):
+    """Rasterize a polyline defined by sequences `cs` and `rs` into `img`.
+
+    The last point is not connected back to the first. Returns the contour
+    list of touched points.
+    """
     contour = []
     img_temp = np.zeros(img.shape)
 
@@ -73,6 +91,11 @@ def add_line(img, cs, rs, val):
 
 
 def add_poly(img, cs, rs, val):
+    """Fill a polygon defined by `cs` and `rs` into `img` with `val`.
+
+    The polygon is closed automatically and a flood fill is used to write the
+    interior. Returns the contour list of touched boundary points.
+    """
     img_temp = np.ones(img.shape)
     contour = []
 
@@ -115,6 +138,15 @@ def add_poly(img, cs, rs, val):
 
 
 def read_actions(imp_points_string):
+    """Parse action strings into polygons, lines, and points.
+
+    Input format examples:
+    - "LINE:[lat lat ...];[lon lon ...]"
+    - "POLYGON:[lat lat ...];[lon lon ...]"
+    - "POINT:lat;lon"
+
+    Returns `(mid_lat, mid_lon, polys, lines, points)`.
+    """
     strings = imp_points_string.split("\n")
 
     polys, lines, points = [], [], []
@@ -166,6 +198,12 @@ def rasterize_actions(
     base_value=0,
     value=1,
 ):
+    """Rasterize points, lines, and polygons into an image of shape `dim`.
+
+    Coordinates are provided in lat/lon and converted using a fixed UTM zone.
+    Returns `(img, active_points)` where `active_points` are grid coordinates
+    that were touched when drawing.
+    """
     img = np.ones(dim) * base_value
     active_points = []
     for line in lines:
@@ -203,6 +241,7 @@ def rasterize_actions(
 
 
 def trim_values(values, src_trans):
+    """Trim a values raster around non-zero area and return new transform."""
     rows, cols = values.shape
     min_row, max_row = int(rows / 2 - 1), int(rows / 2 + 1)
     min_col, max_col = int(cols / 2 - 1), int(cols / 2 + 1)
@@ -226,6 +265,10 @@ def trim_values(values, src_trans):
 
 
 def reproject(values, src_trans, src_crs, dst_crs, trim=True):
+    """Reproject a raster (optionally trimmed) to a different CRS.
+
+    Returns `(dst, dst_trans)` with the new raster array and affine transform.
+    """
     if trim:
         values, src_trans = trim_values(values, src_trans)
 
@@ -263,6 +306,7 @@ def reproject(values, src_trans, src_crs, dst_crs, trim=True):
 
 
 def write_geotiff(filename, values, dst_trans, dst_crs, dtype=np.uint8):
+    """Write a single-band GeoTIFF with provided transform and CRS."""
     with rio.Env():
         with rio.open(
             filename,
@@ -348,6 +392,7 @@ def extract_isochrone(
 
 
 def save_isochrones(results, filename, format="geojson"):
+    """Serialize extracted isochrones to GeoJSON or ESRI Shapefile."""
     if format == "shp":
         schema = {
             "geometry": "MultiLineString",
