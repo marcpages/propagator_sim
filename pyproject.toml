@@ -26,4 +26,13 @@ dev = [
     "matplotlib>=3.10.5",
     "notebook>=7.4.5",
     "ruff>=0.12.9",
+    "pytest>=8.2.2",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q"
+pythonpath = ["."]
+testpaths = [
+    "tests",
 ]
