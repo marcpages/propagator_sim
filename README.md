@@ -7,17 +7,17 @@ Link to the research paper: [PROPAGATOR: An Operational Cellular-Automata Based 
 
 ----------------------------------------
 ## How to install
-Clone this repository. Create a virtual environment, activate it and install the required dependendecies with
+Clone this repository. Use `uv sync` to create a virtual environment and install the required dependencies.
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
 ## Launch a simulation
 ```bash
-python main.py -f ./example/params.json -of ./example/output -tl 24 -dem ./example/dem.tif -veg ./example/veg.tif
+uv run propagator
 ```
 
-See `python main.py --help` for command line args.
+See `uv run propagator --help` for command line args.
 
 
 
