@@ -5,6 +5,7 @@ from typing import List, Optional, Literal
 from pathlib import Path
 from pydantic import (BaseModel, Field,
                       field_validator, model_validator)
+from warnings import warn
 
 # ---- project utils ----------------------------------------------------------
 from propagator.functions import get_p_moist_fn, get_p_time_fn
@@ -98,6 +99,26 @@ class PropagatorConfigurationLegacy(BaseModel):
     )
 
     # ---------- checks ----------
+    @field_validator("dem", "fuel", mode="before")
+    @classmethod
+    def _check_dem_fuel_files(cls, v: str | Path) -> Path:
+        if isinstance(v, str):
+            v = Path(v)
+        # check if the file exists
+        if v is not None and not v.is_file():
+            raise ValueError("DEM file not found.")
+        return v
+
+    @field_validator("output", mode="before")
+    @classmethod
+    def _check_output_folder(cls, v: str | Path) -> Path:
+        if isinstance(v, str):
+            v = Path(v)
+        # check if the folder exists
+        if not v.is_dir():
+            raise ValueError("Output folder not found.")
+        return v
+
     @field_validator("init_date", mode="before")
     @classmethod
     def _parse_init_date(cls, v: str | datetime) -> datetime:
@@ -149,13 +170,11 @@ class PropagatorConfigurationLegacy(BaseModel):
         if self.mode == "geotiff":
             if not self.dem:
                 raise ValueError("DEM path must be set in 'geotiff' mode")
-            if not self.dem.is_file():
-                raise ValueError("DEM file not found")
-
             if not self.fuel:
                 raise ValueError("FUEL path must be set in 'geotiff' mode")
-            if not self.fuel.is_file():
-                raise ValueError("FUEL file not found")
+        elif self.mode == "tileset" and (self.dem or self.fuel):
+            warn("DEM and FUEL paths are ignored in 'tileset' mode. "
+                 "Please remove them from the configuration.")
 
         # set the functions
         self.p_time_fn = get_p_time_fn(self.ros_model)

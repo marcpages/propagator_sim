@@ -7,6 +7,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, model_validator, field_validator
 from typing import Tuple
 import numpy as np
+import numpy.typing as npt
 from pyproj import CRS, Transformer
 from rasterio.features import rasterize
 import rasterio.enums as rio_enums
@@ -31,8 +32,8 @@ class GeometryBase(BaseModel):
     )
 
     kind: GeometryKind
-    ys: np.ndarray
-    xs: np.ndarray
+    ys: npt.NDArray[np.floating]
+    xs: npt.NDArray[np.floating]
     crs: CRS = CRS.from_epsg(4326)  # default to WGS84
 
     # Coerce xs/ys to 1D float arrays
