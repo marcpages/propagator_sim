@@ -1,18 +1,19 @@
 import logging
 from typing import Any
+
+import numpy as np
+import rasterio as rio
+import utm
 from attr import dataclass, field
 from pyproj import Proj, transform
-import rasterio as rio
-import numpy as np
 from scipy import ndimage
-import utm
 
-from propagator_io.geo import GeographicInfo
-from propagator.propagator import PropagatorError
-
+from propagator.models import PropagatorError
 from propagator.utils import add_point, rasterize_actions, read_actions
+from propagator_io.geo import GeographicInfo
 
-DEFAULT_TILES_TAG = 'default'
+DEFAULT_TILES_TAG = "default"
+
 
 class PropagatorDataLoaderException(Exception): ...
 

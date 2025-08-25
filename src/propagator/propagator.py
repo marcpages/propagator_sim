@@ -590,7 +590,7 @@ class Propagator:
         self.time = time
         self.decay_actions_moisture(time_delta)
 
-        if scheduler_event.moisture:
+        if scheduler_event.moisture is not None:
             self.moisture = scheduler_event.moisture
 
         if scheduler_event.additional_moisture is not None:

@@ -106,7 +106,15 @@ class Scheduler():
     # --- Basic queue ops -----------------------------------------------------
 
     def push_ignitions(self, ignitions: Ignitions) -> None:        
-        event: SchedulerEvent = self._queue.setdefault(ignitions.time, SchedulerEvent()) # type: ignore
+        event: SchedulerEvent | None
+        if ignitions.time in self._queue:
+            event = self._queue.get(ignitions.time, None)
+        else:
+            event = SchedulerEvent()
+            self._queue[ignitions.time] = event
+        if event is None:
+            raise ValueError("SchedulerEvent should not be None here")
+
         event.coords.append(_validate_coords(ignitions.coords))
 
     def pop(self) -> PopResult:
@@ -149,35 +157,20 @@ class Scheduler():
             ignitions = Ignitions(time=boundary_conditions.time, coords=coords)
             self.push_ignitions(ignitions)
     
-            
-
-    def add_actions(self, actions: Actions):
-        """
-        Adds actions to the scheduler.
-
-        Parameters
-        ----------
-        actions : PropagatorActions
-            The actions to add at defined time.
-        """
-        entry = self._queue.get(actions.time, None)
-        if entry is None:
-            entry = SchedulerEvent()
-            self._queue[actions.time] = entry
-        if actions.additional_moisture is not None:
+        if boundary_conditions.additional_moisture is not None:
             if entry.additional_moisture is None:
-                entry.additional_moisture = actions.additional_moisture
+                entry.additional_moisture = boundary_conditions.additional_moisture
             else:
-                entry.additional_moisture += actions.additional_moisture                
-        if actions.vegetation_changes is not None:
+                entry.additional_moisture += boundary_conditions.additional_moisture                
+        if boundary_conditions.vegetation_changes is not None:
             if entry.vegetation_changes is None:
-                entry.vegetation_changes = actions.vegetation_changes
+                entry.vegetation_changes = boundary_conditions.vegetation_changes
             else:
-                # entry.vegetation_changes += actions.vegetation_changes
+                # entry.vegetation_changes += boundary_conditions.vegetation_changes
                 entry.vegetation_changes = np.where(
-                    actions.vegetation_changes == 0,
+                    boundary_conditions.vegetation_changes == 0,
                     entry.vegetation_changes,
-                    actions.vegetation_changes
+                    boundary_conditions.vegetation_changes
                 )
 
 

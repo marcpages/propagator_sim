@@ -34,7 +34,7 @@ from propagator.constants import (
     A,
     Q,
 )
-from propagator.types import PMoistFn, PTimeFn
+from propagator.models import PMoistFn, PTimeFn
 from propagator.utils import normalize
 
 type ROS_model_literal = Literal['default', 'wang', 'rothermel']
