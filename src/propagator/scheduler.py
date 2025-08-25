@@ -3,97 +3,103 @@
 Stores future updates grouped by simulation time and exposes utilities to push
 events, pop the earliest batch, and inspect active realizations.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable, List
+from typing import (
+    Iterable,
+    Iterator,
+    List,
+    Tuple,
+    Optional,
+    TypeVar,
+    Generic
+)
 from sortedcontainers import SortedDict
 import numpy as np
 import numpy.typing as npt
 
+# ---- Type aliases -----------------------------------------------------------
+
+TTime = TypeVar("TTime", int, float)  # time keys can be int or float
+
+# Integer coords array of shape (n, 3). We can’t encode the shape statically
+# with stdlib typing, but we DO lock the dtype to integer families.
+CoordsArray = npt.NDArray[np.integer]
+
+# The payload shape we pass around
+UpdateBatch = List[CoordsArray]
+ScheduledPair = Tuple[TTime, CoordsArray]
+PopResult = Tuple[TTime, UpdateBatch]
+
+
+def _validate_coords(coords: npt.ArrayLike) -> CoordsArray:
+    if not isinstance(coords, np.ndarray):
+        raise TypeError("coords must be a numpy.ndarray")
+    if coords.ndim != 2 or coords.shape[1] != 3:
+        raise ValueError("coords must have shape (n, 3)")
+    if not np.issubdtype(coords.dtype, np.integer):
+        raise TypeError("coords dtype must be an integer type")
+    # Narrow the runtime type to CoordsArray for the type checker
+    return coords  # type: ignore[return-value]
+
 
 @dataclass
-class Scheduler:
-    """Handles scheduling of propagation updates by time."""
+class Scheduler(Generic[TTime]):
+    """
+    Lightweight event scheduler for propagation updates.
 
-    list: SortedDict = field(default_factory=SortedDict)
+    Generic over the time key type (int or float), so your inputs and outputs
+    stay consistent.
+    """
 
-    def push(self, coords: npt.NDArray[np.integer], time: int) -> None:
-        """Schedule a set of coordinates at a given time.
+    _queue: SortedDict = field(default_factory=SortedDict, init=False, repr=False)
 
-        Parameters
-        ----------
-        coords : numpy.ndarray
-            Array of shape (n, 3) with [row, col, realization].
-        time : int | float
-            Simulation time when these updates occur.
-        """
-        if time not in self.list:
-            self.list[time] = []
-        self.list[time].append(coords)
+    # --- Basic queue ops -----------------------------------------------------
 
-    def push_all(self, updates: Iterable[tuple[int, npt.NDArray[np.integer]]]) -> None:
-        """Push multiple updates.
+    def push(self, coords: CoordsArray, time: TTime) -> None:        
+        bucket: UpdateBatch = self._queue.setdefault(time, []) # type: ignore
+        bucket.append(_validate_coords(coords))
 
-        Parameters
-        ----------
-        updates : Iterable[tuple[int, numpy.ndarray]]
-            Pairs of (time, coords array).
-        """
+    def push_all(self, updates: Iterable[ScheduledPair[TTime]]) -> None:
         for t, u in updates:
             self.push(u, t)
 
-    def pop(self) -> tuple[int, List[npt.NDArray[np.integer]]]:
-        """Pop and return the earliest scheduled batch.
+    def pop(self) -> PopResult[TTime]:
+        if not self:
+            raise IndexError("pop from empty Scheduler")
+        time, updates = self._queue.popitem(index=0)
+        return time, list(updates)
 
-        Returns
-        -------
-        tuple[int, list[numpy.ndarray]]
-            The time and list of coord arrays.
-        """
-        item = self.list.popitem(index=0)
-        return item
+    # --- Introspection -------------------------------------------------------
 
     def active(self) -> npt.NDArray[np.integer]:
-        """
-        Return the active realization indices that have a scheduled update.
-
-        Returns
-        -------
-        numpy.ndarray
-            1D array of unique realization indices.
-        """
-        active_t = np.unique(
-            [e for k in self.list.keys() for c in self.list[k] for e in c[:, 2]]
-        )
-        return active_t
+        if not self:
+            return np.array([], dtype=int)
+        arrays = [a for batches in self._queue.values() for a in batches]
+        if len(arrays) == 1:
+            return np.unique(arrays[0][:, 2])
+        stacked = np.concatenate(arrays, axis=0)
+        return np.unique(stacked[:, 2])
 
     def __len__(self) -> int:
-        """Number of distinct scheduled time keys."""
-        return len(self.list)
+        return len(self._queue)
 
-    def next_time(self) -> int | None:
-        """
-        Return the earliest scheduled time without mutating the queue.
+    def is_empty(self) -> bool:
+        return len(self) == 0
 
-        Returns
-        -------
-        int | None
-            Earliest time or None if empty.
-        """
-        if len(self) == 0:
+    def clear(self) -> None:
+        self._queue.clear()
+
+    def next_time(self) -> Optional[TTime]:
+        if not self:
             return None
+        t, _ = self._queue.peekitem(index=0)
+        return t  # type: ignore[return-value]
 
-        next_time, _next_updates = self.list.peekitem(index=0)
-        return next_time  # type: ignore
+    # --- Iteration utilities -------------------------------------------------
 
-    def __call__(self):
-        """Iterate over scheduled updates, allowing dynamic rescheduling."""
-        while len(self) > 0:
-            c_time, updates = self.pop()
-            print("u")
-            new_updates: Iterable[tuple[int, npt.NDArray[np.integer]]] = yield (
-                c_time,
-                updates,
-            )
-            print("n")
-            self.push_all(new_updates)
+    def iterate(self) -> Iterator[PopResult[TTime]]:
+        while self:
+            yield self.pop()
+
