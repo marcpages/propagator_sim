@@ -5,7 +5,8 @@ modulators for wind/slope/moisture, fire spotting distance, and fireline
 intensity utilities used by the core propagator.
 """
 
-from typing import Optional
+from typing import Optional, Literal
+from unittest import case
 
 import numpy as np
 import numpy.typing as npt
@@ -36,6 +37,8 @@ from propagator.constants import (
 from propagator.types import PMoistFn, PTimeFn
 from propagator.utils import normalize
 
+type ROS_model_literal = Literal['default', 'wang', 'rothermel']
+type Moisture_model_literal = Literal['default', 'new_formulation', 'rothermel']
 
 def load_parameters(
     probability_file: str | None = None,
@@ -57,30 +60,34 @@ def load_parameters(
         p_veg = np.loadtxt(p_vegetation)
 
 
-def get_p_time_fn(ros_model_code: str) -> Optional[PTimeFn]:
+def get_p_time_fn(ros_model_code: ROS_model_literal) -> PTimeFn:
     """Select a rate-of-spread model by code.
 
     Returns a function with signature `(v0, dem_from, dem_to, veg_from, veg_to,
     angle_to, dist, moist, w_dir, w_speed) -> (time, ros)`.
     """
-    ros_models = {
-        "default": p_time_standard,
-        "wang": p_time_wang,
-        "rothermel": p_time_rothermel,
-    }
-    p_time_function = ros_models.get(ros_model_code, None)
-    return p_time_function
+    match ros_model_code:
+        case 'default':
+            return p_time_standard
+        case 'wang':
+            return p_time_wang
+        case 'rothermel':
+            return p_time_rothermel
+
+    raise ValueError(f"Unknown ros_model_code: {ros_model_code!r}")
 
 
-def get_p_moist_fn(moist_model_code: str) -> Optional[PMoistFn]:
+def get_p_moist_fn(moist_model_code: Moisture_model_literal) -> PMoistFn:
     """Select a moisture probability correction by code."""
-    moist_models = {
-        "default": moist_proba_correction_1,
-        "new_formulation": moist_proba_correction_1,
-        "rothermel": moist_proba_correction_2,
-    }
-    p_moist_function = moist_models.get(moist_model_code, None)
-    return p_moist_function
+    match moist_model_code:
+        case 'default':
+            return moist_proba_correction_1
+        case 'new_formulation':
+            return moist_proba_correction_1
+        case 'rothermel':
+            return moist_proba_correction_2
+
+    raise ValueError(f"Unknown moist_model_code: {moist_model_code!r}")
 
 
 def p_time_rothermel(

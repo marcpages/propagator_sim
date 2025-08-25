@@ -97,16 +97,25 @@ def main():
     prob_table = np.loadtxt("example/prob_table.txt")
     p_veg = np.loadtxt("example/p_vegetation.txt")
 
+    if cfg.dem is None or cfg.fuel is None:
+        raise ValueError("DEM and FUEL files must be provided in 'geotiff' mode")
+    
     # loader geographic information
     loader = PropagatorDataFromGeotiffs(
-        dem_file=cfg.dem,
-        veg_file=cfg.fuel,
+        dem_file=str(cfg.dem),
+        veg_file=str(cfg.fuel),
     )
 
     # Load the data
     dem = loader.get_dem()
     veg = loader.get_veg()
     geo_info = loader.get_geo_info()
+
+    args = dict()
+    if cfg.p_time_fn is not None:
+        args.update(dict(p_time_fn=cfg.p_time_fn))
+    if cfg.p_moist_fn is not None:
+        args.update(dict(p_moist_fn=cfg.p_moist_fn))
 
     simulator = Propagator(
         dem=dem,
@@ -116,14 +125,10 @@ def main():
         probability_table=prob_table,
         veg_parameters=p_veg,
         do_spotting=cfg.do_spotting,
-        p_time_fn=cfg.p_time_fn,
-        p_moist_fn=cfg.p_moist_fn,
+        **args
     )
 
     boundary_conditions_list = cfg.get_propagator_bcs(geo_info)
-    bc_0 = boundary_conditions_list[0]
-    print(bc_0.ignitions.sum())
-    # actions_list = cfg.get_propagator_actions(geo_info)
 
     while True:
         next_time = simulator.next_time()
@@ -149,7 +154,7 @@ def main():
         info_msg(f"New time: {simulator.time}")
 
         if simulator.time % cfg.time_resolution == 0:
-            output = simulator.get_output()
+            _output = simulator.get_output()
             # Save the output to the specified folder
             ...
 

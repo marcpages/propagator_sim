@@ -9,7 +9,7 @@ from warnings import warn
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---- project utils ----------------------------------------------------------
-from propagator.functions import get_p_moist_fn, get_p_time_fn
+from propagator.functions import get_p_moist_fn, get_p_time_fn, ROS_model_literal, Moisture_model_literal
 from propagator.propagator import (
     PropagatorActions,
     PropagatorBoundaryConditions,
@@ -79,11 +79,11 @@ class PropagatorConfigurationLegacy(BaseModel):
         False,
         description="Spotting option"
     )
-    ros_model: str = Field(
+    ros_model: ROS_model_literal = Field(
         "default",
         description="ROS model name"
     )
-    prob_moist_model: str = Field(
+    prob_moist_model: Moisture_model_literal = Field(
         "default",
         description="Moisture model name"
     )

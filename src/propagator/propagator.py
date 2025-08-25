@@ -25,6 +25,8 @@ from propagator.constants import (
 from propagator.functions import (
     fire_spotting,
     fireline_intensity,
+    get_p_moist_fn,
+    get_p_time_fn,
     lhv_canopy,
     lhv_dead_fuel,
     w_h_effect_on_probability,
@@ -119,8 +121,8 @@ class Propagator:
     do_spotting: bool
 
     # selected simulation functions
-    p_time_fn: "PTimeFn"
-    p_moist_fn: "PMoistFn"
+    p_time_fn: PTimeFn = field(default=get_p_time_fn('default'))
+    p_moist_fn: PMoistFn = field(default=get_p_moist_fn('default'))
 
     # scheduler object
     scheduler: Scheduler = field(init=False, default_factory=Scheduler)
@@ -144,6 +146,7 @@ class Propagator:
         self.ros = np.zeros(shape + (self.realizations,), dtype=np.float16)
         self.fireline_int = np.zeros(shape + (self.realizations,), dtype=np.float16)
         self.actions_moisture = np.zeros(shape, dtype=np.float16)
+
 
     def set_ignitions(self, ignitions: npt.NDArray[np.bool_], time: int) -> None:
         """
