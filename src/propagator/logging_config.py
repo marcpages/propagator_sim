@@ -8,8 +8,8 @@ import sys
 class InfoFilter(logging.Filter):
     """Filter that lets INFO/DEBUG go to stdout handler."""
 
-    def filter(self, rec):
-        return rec.levelno in (logging.DEBUG, logging.INFO)
+    def filter(self, record) -> bool:
+        return record.levelno in (logging.DEBUG, logging.INFO)
 
 
 def configure_logger() -> None:
