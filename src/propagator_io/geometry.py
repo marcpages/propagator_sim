@@ -132,10 +132,7 @@ Geometry = Union[GeoPoint, GeoLine, GeoPolygon]
 
 # ---- parsing ---------------------------------------------------------------
 _POINT_RE = re.compile(
-    r"""^POINT:\[\s*
-        (?P<y>-?\d+(?:\.\d+)?)\s*;\s*
-        (?P<x>-?\d+(?:\.\d+)?)\s*
-        \]\s*$""",
+    r"""^POINT:\s*(?P<y>-?\d+(?:\.\d+)?)\s*;\s*(?P<x>-?\d+(?:\.\d+)?)\s*$""",
     re.IGNORECASE | re.VERBOSE,
 )
 

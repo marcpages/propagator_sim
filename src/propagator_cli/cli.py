@@ -62,6 +62,7 @@ class PropagatorCLILegacy(BaseSettings):
         NOTE: CLI config override JSON config in case of overlapping"""
         with open(self.config) as f:
             json_cfg = json.load(f)
+
         # CLI values override JSON if both are provided
         return PropagatorConfigurationLegacy(**json_cfg,
                                              **self.model_dump())
@@ -92,9 +93,9 @@ def main():
     cfg = cli.build_configuration()
     ok_msg("Configuration loaded")
 
-    v0 = np.loadtxt("v0_table.txt")
-    prob_table = np.loadtxt("prob_table.txt")
-    p_veg = np.loadtxt("p_vegetation.txt")
+    v0 = np.loadtxt("example/v0_table.txt")
+    prob_table = np.loadtxt("example/prob_table.txt")
+    p_veg = np.loadtxt("example/p_vegetation.txt")
 
     # loader geographic information
     loader = PropagatorDataFromGeotiffs(

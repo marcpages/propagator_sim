@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
-from typing import List, Optional, Literal
 from pathlib import Path
-from pydantic import (BaseModel, Field,
-                      field_validator, model_validator)
+from typing import List, Literal, Optional
 from warnings import warn
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---- project utils ----------------------------------------------------------
 from propagator.functions import get_p_moist_fn, get_p_time_fn
@@ -13,12 +14,9 @@ from propagator.propagator import (
     PropagatorActions,
     PropagatorBoundaryConditions,
 )
-
 from propagator_io.boundary_conditions import BoundaryConditionsInput
-from propagator_io.geometry import (
-    GeometryParser, Geometry, DEFAULT_EPSG_GEOMETRY
-)
 from propagator_io.geo import GeographicInfo
+from propagator_io.geometry import DEFAULT_EPSG_GEOMETRY, Geometry, GeometryParser
 
 
 # ---- configuration ----------------------------------------------------------
@@ -116,7 +114,7 @@ class PropagatorConfigurationLegacy(BaseModel):
             v = Path(v)
         # check if the folder exists
         if not v.is_dir():
-            raise ValueError("Output folder not found.")
+            os.makedirs(v, exist_ok=True)
         return v
 
     @field_validator("init_date", mode="before")
