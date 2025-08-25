@@ -20,7 +20,7 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - CLI Usage: cli.md
-  - API Reference: reference/
+  - API Reference: reference/index.md
 
 
 plugins:

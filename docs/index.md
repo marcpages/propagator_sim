@@ -12,4 +12,4 @@ Use the left navigation to explore usage and API details.
 
 - [Getting started](getting-started.md): installation and a first run
 - [CLI](cli.md): usage: flags and examples
-- [API](reference): reference: Python modules and types
+- [API](reference/index.md): reference: Python modules and types

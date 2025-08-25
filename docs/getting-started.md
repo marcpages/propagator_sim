@@ -28,4 +28,3 @@ Example with sample data:
 ```bash
 uv run propagator -f ./example/params.json -of ./example/output -tl 24 -dem ./example/dem.tif -veg ./example/veg.tif
 ```
-
