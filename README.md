@@ -25,3 +25,12 @@ uv run propagator
 ```
 
 See `uv run propagator --help` for command line args.
+
+## Documentation
+
+This repo uses MkDocs with the Material theme and mkdocstrings for API reference.
+
+- Serve locally: `uv run mkdocs serve`
+- Build static site: `uv run mkdocs build`
+
+Docs live under `docs/` and are configured by `mkdocs.yml`.
