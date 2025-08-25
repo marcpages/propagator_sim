@@ -7,7 +7,6 @@ summary statistics, and output snapshots suitable for CLI and IO layers.
 """
 
 from dataclasses import dataclass, field
-from typing import List
 
 import numpy as np
 import numpy.typing as npt
@@ -31,70 +30,18 @@ from propagator.functions import (
     lhv_dead_fuel,
     w_h_effect_on_probability,
 )
+from propagator.models import (
+    BoundaryConditions,
+    Ignitions,
+    PMoistFn,
+    PropagatorOutput,
+    PropagatorStats,
+    PTimeFn,
+    UpdateBatch,
+)
 from propagator.scheduler import Scheduler
-from propagator.types import PMoistFn, PTimeFn
 
 RNG = np.random.default_rng(12345)
-
-
-class PropagatorError(Exception):
-    """Domain-specific error raised by PROPAGATOR."""
-
-
-@dataclass(frozen=True)
-class PropagatorBoundaryConditions:
-    """Boundary conditions applied at or after a given time.
-
-    - time: Simulation time the conditions refer to.
-    - ignitions: Boolean mask of new ignition points (True ignites).
-    - moisture: Fuel moisture map (%), same shape as vegetation.
-    - wind_dir: Wind direction map (radians, mathematical convention).
-    - wind_speed: Wind speed map (km/h).
-    """
-
-    time: int
-    ignitions: npt.NDArray[np.bool_] | None
-    moisture: npt.NDArray[np.floating] | None
-    wind_dir: npt.NDArray[np.floating] | None
-    wind_speed: npt.NDArray[np.floating] | None
-
-
-@dataclass(frozen=True)
-class PropagatorActions:
-    """Operational actions that modify short-term conditions.
-
-    - time: Simulation time the actions refer to.
-    - additional_moisture: Extra moisture to add to fuel (%), can be sparse.
-    - vegetation_changes: Raster of vegetation type overrides (NaN to skip).
-    """
-
-    time: int
-    additional_moisture: npt.NDArray[np.floating] | None
-    vegetation_changes: npt.NDArray[np.floating] | None
-
-
-@dataclass(frozen=True)
-class PropagatorStats:
-    """Summary statistics for the current simulation state."""
-
-    n_active: int
-    area_mean: float
-    area_50: float
-    area_75: float
-    area_90: float
-
-
-@dataclass(frozen=True)
-class PropagatorOutput:
-    """Snapshot of simulation outputs at a given time step."""
-
-    time: int
-    fire_probability: npt.NDArray[np.floating] | None
-    ros_mean: npt.NDArray[np.floating] | None
-    ros_max: npt.NDArray[np.floating] | None
-    fireline_int_mean: npt.NDArray[np.floating] | None
-    fireline_int_max: npt.NDArray[np.floating] | None
-    stats: PropagatorStats | None = field(default=None)
 
 
 @dataclass
@@ -121,11 +68,11 @@ class Propagator:
     do_spotting: bool
 
     # selected simulation functions
-    p_time_fn: PTimeFn = field(default=get_p_time_fn('default'))
-    p_moist_fn: PMoistFn = field(default=get_p_moist_fn('default'))
+    p_time_fn: PTimeFn = field(default=get_p_time_fn("default"))
+    p_moist_fn: PMoistFn = field(default=get_p_moist_fn("default"))
 
     # scheduler object
-    scheduler: Scheduler = field(init=False, default_factory=Scheduler)
+    scheduler: Scheduler = field(init=False)
 
     # simulation state
     time: int = field(init=False, default=0)
@@ -142,21 +89,19 @@ class Propagator:
     def __post_init__(self):
         """Allocate internal state arrays based on the vegetation grid shape."""
         shape = self.veg.shape
+        self.scheduler = Scheduler(realizations=self.realizations)
         self.fire = np.zeros(shape + (self.realizations,), dtype=np.int8)
         self.ros = np.zeros(shape + (self.realizations,), dtype=np.float16)
         self.fireline_int = np.zeros(shape + (self.realizations,), dtype=np.float16)
         self.actions_moisture = np.zeros(shape, dtype=np.float16)
 
-
-    def set_ignitions(self, ignitions: npt.NDArray[np.bool_], time: int) -> None:
+    def set_ignitions(self, ignitions: Ignitions) -> None:
         """
         Apply ignitions to the state of the simulation.
         """
-        points = np.argwhere(ignitions)
-        for t in range(self.realizations):
-            for p in points:
-                self.scheduler.push(np.array([p[0], p[1], t]), time=time)
-                self.fire[p[0], p[1], t] = 0
+        self.scheduler.push_ignitions(ignitions)
+        for p in ignitions.coords:
+            self.fire[p[0], p[1], p[2]] = 0
 
     def compute_fire_probability(self) -> npt.NDArray[np.floating]:
         """Return mean burn probability across realizations for each cell.
@@ -297,10 +242,8 @@ class Propagator:
 
         return probability
 
-    def set_boundary_conditions(
-        self, boundary_condition: PropagatorBoundaryConditions
-    ) -> None:
-        """Apply moisture, wind, and ignitions at or after the given time.
+    def set_boundary_conditions(self, boundary_condition: BoundaryConditions) -> None:
+        """Externally apply boundary conditions at desired time.
 
         Parameters
         ----------
@@ -311,35 +254,8 @@ class Propagator:
             raise ValueError(
                 "Boundary conditions cannot be applied in the past. Please check the time of the boundary conditions."
             )
+        self.scheduler.add_boundary_conditions(boundary_condition)
 
-        if boundary_condition.moisture is not None:
-            self.moisture = boundary_condition.moisture
-        if boundary_condition.wind_dir is not None:
-            self.wind_dir = boundary_condition.wind_dir
-        if boundary_condition.wind_speed is not None:
-            self.wind_speed = boundary_condition.wind_speed
-
-        if boundary_condition.ignitions is not None:
-            self.set_ignitions(boundary_condition.ignitions, boundary_condition.time)
-
-    def apply_actions(self, actions: PropagatorActions) -> None:
-        """
-        Set the actions to be applied at the current time step.
-        """
-        if self.time > actions.time:
-            raise ValueError(
-                "Actions cannot be applied in the past. Please check the time of the actions."
-            )
-
-        if (
-            self.actions_moisture is not None
-            and actions.additional_moisture is not None
-        ):
-            self.actions_moisture += actions.additional_moisture
-        if actions.vegetation_changes is not None:
-            # mutate vegetation where needed
-            mask = ~np.isnan(actions.vegetation_changes)
-            self.veg[mask] = actions.vegetation_changes[mask]
 
     def compute_spotting(
         self,
@@ -455,9 +371,7 @@ class Propagator:
 
         return nr_spot, nc_spot, nt_spot, transition_time_spot
 
-    def apply_updates(
-        self, updates: List[npt.NDArray[np.integer]]
-    ) -> list[tuple[int, npt.NDArray[np.integer]]]:
+    def apply_updates(self, updates: UpdateBatch) -> list[Ignitions]:
         """Apply a batch of burning updates and schedule new ones.
 
         Parameters
@@ -629,9 +543,9 @@ class Propagator:
 
         # schedule the new updates
         unique_ticks = np.unique(prop_tick)
-        new_updates = list(
-            map(lambda t: (int(t / TICK_PRECISION), extract_updates(t)), unique_ticks)
-        )
+        new_updates = [
+            Ignitions(t / TICK_PRECISION, extract_updates(t)) for t in unique_ticks
+        ]
 
         return new_updates
 
@@ -670,12 +584,36 @@ class Propagator:
         self,
     ) -> None:
         """Advance the simulation to the next scheduled time and update state."""
-        time, updates = self.scheduler.pop()
+        time, scheduler_event = self.scheduler.pop()
+
         time_delta = time - self.time
         self.time = time
         self.decay_actions_moisture(time_delta)
-        new_updates = self.apply_updates(updates)
-        self.scheduler.push_all(new_updates)
+
+        if scheduler_event.moisture:
+            self.moisture = scheduler_event.moisture
+
+        if scheduler_event.additional_moisture is not None:
+            if self.actions_moisture is None:
+                self.actions_moisture = np.zeros_like(self.moisture)
+            self.actions_moisture += scheduler_event.additional_moisture
+            self.actions_moisture = np.clip(self.actions_moisture, 0, 100)
+
+        if scheduler_event.wind_dir is not None:
+            self.wind_dir = scheduler_event.wind_dir
+
+        if scheduler_event.wind_speed is not None:
+            self.wind_speed = scheduler_event.wind_speed
+        
+        if scheduler_event.vegetation_changes is not None:
+            # mutate vegetation where needed
+            mask = ~np.isnan(scheduler_event.vegetation_changes)
+            self.veg[mask] = scheduler_event.vegetation_changes[mask]
+
+        new_updates = self.apply_updates(scheduler_event.coords)
+
+        for new_ignitions in new_updates:
+            self.scheduler.push_ignitions(new_ignitions)
 
     def get_output(self) -> PropagatorOutput:
         """Assemble the current outputs and summary stats into a dataclass.

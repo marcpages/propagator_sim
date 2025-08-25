@@ -9,12 +9,16 @@ from warnings import warn
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---- project utils ----------------------------------------------------------
-from propagator.functions import get_p_moist_fn, get_p_time_fn, ROS_model_literal, Moisture_model_literal
-from propagator.propagator import (
-    PropagatorActions,
-    PropagatorBoundaryConditions,
+from propagator.functions import (
+    Moisture_model_literal,
+    ROS_model_literal,
+    get_p_moist_fn,
+    get_p_time_fn,
 )
-from propagator_io.boundary_conditions import BoundaryConditionsInput
+from propagator.propagator import (
+    BoundaryConditions,
+)
+from propagator_io.boundary_conditions import TimedInput
 from propagator_io.geo import GeographicInfo
 from propagator_io.geometry import DEFAULT_EPSG_GEOMETRY, Geometry, GeometryParser
 
@@ -71,7 +75,7 @@ class PropagatorConfigurationLegacy(BaseModel):
         None,
         description="List of ignitions at simulation start (time=0)."
     )
-    boundary_conditions: List[BoundaryConditionsInput] = Field(
+    boundary_conditions: List[TimedInput] = Field(
         default_factory=list,
         description="List of boundary conditions"
     )
@@ -155,7 +159,7 @@ class PropagatorConfigurationLegacy(BaseModel):
         bcs = data.get("boundary_conditions")
         if isinstance(bcs, list):
             data["boundary_conditions"] = [
-                BoundaryConditionsInput.model_validate(bc,
+                TimedInput.model_validate(bc,
                                                        context={"epsg": epsg})
                 for bc in bcs
             ]
@@ -219,24 +223,13 @@ class PropagatorConfigurationLegacy(BaseModel):
 
         return self
 
-    def get_propagator_bcs(
+    def get_boundary_conditions(
         self,
         geo_info: GeographicInfo
-    ) -> List[PropagatorBoundaryConditions]:
+    ) -> List[BoundaryConditions]:
         # NOTE: boundary conditions should be sorted by time already
         return [
-            bc.get_propagator_bc(geo_info)
+            bc.get_boundary_conditions(geo_info)
             for bc in self.boundary_conditions
         ]
 
-    def get_propagator_actions(
-        self,
-        geo_info: GeographicInfo
-    ) -> List[PropagatorActions]:
-        # NOTE: boundary conditions should be sorted by time already
-        actions_list = []
-        for bc in self.boundary_conditions:
-            actions = bc.get_propagator_action(geo_info)
-            if actions:
-                actions_list.append(actions)
-        return actions_list

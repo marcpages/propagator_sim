@@ -13,8 +13,7 @@ from propagator_io.geometry import (
 # ---- project utils ----------------------------------------------------------
 from propagator.utils import normalize
 from propagator.propagator import (
-    PropagatorActions,
-    PropagatorBoundaryConditions,
+    BoundaryConditions,
 )
 from propagator_io.geo import GeographicInfo
 
@@ -25,7 +24,7 @@ def meteo_deg_to_model_rad(deg: float) -> float:
 
 
 # ---- simulation inputs ------------------------------------------------------
-class BoundaryConditionsInput(BaseModel):
+class TimedInput(BaseModel):
     """Single time-step boundary conditions."""
     model_config = ConfigDict(extra="allow")
 
@@ -93,35 +92,35 @@ class BoundaryConditionsInput(BaseModel):
                 )
         return data
 
-    def get_propagator_bc(
+    def get_boundary_conditions(
             self,
             geo_info: GeographicInfo
-    ) -> PropagatorBoundaryConditions:
+    ) -> BoundaryConditions:
         w_speed_arr = np.ones(geo_info.shape) * self.w_speed
         w_dir_arr = np.ones(geo_info.shape) * self.w_dir
         moisture_arr = np.ones(geo_info.shape) * self.moisture
-        if self.ignitions:
-            ign_arr = rasterize_geometries(
+
+        ignition_mask = None
+
+        if self.ignitions is not None:
+            ignition_mask = rasterize_geometries(
                 geometries=self.ignitions,
                 geo_info=geo_info,
                 default_value=1,  # set 1 for ignited pixels
                 dtype="uint8",
                 merge_alg="replace"
-                )
-        else:
-            ign_arr = None
+            )
+
+
         # convert info in PropagatorBoundaryConditions
-        return PropagatorBoundaryConditions(
+        return BoundaryConditions(
             time=self.time,
             wind_speed=w_speed_arr,
             wind_dir=w_dir_arr,
             moisture=moisture_arr,
-            ignitions=ign_arr
+            ignition_mask=ignition_mask
         )
 
-    def get_propagator_action(
-        self,
-        geo_info: GeographicInfo
-    ) -> list[PropagatorActions]:
-        """Convert to PropagatorActions."""
-        return []
+
+
+

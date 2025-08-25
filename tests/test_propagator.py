@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 
 from propagator.propagator import (
     Propagator,
-    PropagatorBoundaryConditions,
-    PropagatorActions,
+    BoundaryConditions,
+    Actions,
     PropagatorStats,
     PropagatorOutput,
 )
@@ -136,7 +136,7 @@ def test_set_ignitions_schedules(sample_propagator):
 
 def test_set_boundary_conditions_and_past_time(sample_propagator):
     prop = sample_propagator
-    bc = PropagatorBoundaryConditions(
+    bc = BoundaryConditions(
         time=prop.time,
         ignitions=None,
         moisture=np.full(prop.veg.shape, 20.0),
@@ -150,7 +150,7 @@ def test_set_boundary_conditions_and_past_time(sample_propagator):
 
     with pytest.raises(ValueError):
         prop.set_boundary_conditions(
-            PropagatorBoundaryConditions(time=prop.time - 1, ignitions=None, moisture=None, wind_dir=None, wind_speed=None)
+            BoundaryConditions(time=prop.time - 1, ignitions=None, moisture=None, wind_dir=None, wind_speed=None)
         )
 
 
@@ -257,7 +257,7 @@ def test_apply_actions_and_decay_and_get_moisture(sample_propagator):
     # Apply moisture addition
     add_m = np.array([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 0.0]])
     prop.apply_actions(
-        PropagatorActions(time=prop.time, additional_moisture=add_m, vegetation_changes=None)
+        Actions(time=prop.time, additional_moisture=add_m, vegetation_changes=None)
     )
     assert np.all(prop.actions_moisture == add_m)
 
@@ -267,7 +267,7 @@ def test_apply_actions_and_decay_and_get_moisture(sample_propagator):
     )
     prev = prop.veg.copy()
     prop.apply_actions(
-        PropagatorActions(time=prop.time, additional_moisture=None, vegetation_changes=veg_changes)
+        Actions(time=prop.time, additional_moisture=None, vegetation_changes=veg_changes)
     )
     expected = prev.copy()
     expected[0, 1] = 0
@@ -286,7 +286,7 @@ def test_apply_actions_and_decay_and_get_moisture(sample_propagator):
     # Past actions time rejected
     with pytest.raises(ValueError):
         prop.apply_actions(
-            PropagatorActions(time=prop.time - 1, additional_moisture=None, vegetation_changes=None)
+            Actions(time=prop.time - 1, additional_moisture=None, vegetation_changes=None)
         )
 
 

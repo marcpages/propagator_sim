@@ -128,26 +128,14 @@ def main():
         **args
     )
 
-    boundary_conditions_list = cfg.get_propagator_bcs(geo_info)
+    boundary_conditions_list = cfg.get_boundary_conditions(geo_info)
+    for boundary_condition in boundary_conditions_list:
+        simulator.set_boundary_conditions(boundary_condition)
 
     while True:
         next_time = simulator.next_time()
         if next_time is None:
             break
-
-        info_msg(f"Supposed Next time: {next_time}")
-
-        if len(boundary_conditions_list) > 0:
-            boundary_conditions = boundary_conditions_list[0]
-            if boundary_conditions.time <= next_time:
-                simulator.set_boundary_conditions(boundary_conditions)
-                boundary_conditions_list.pop(0)
-
-        # if len(actions_list) > 0:
-        #     actions = actions_list[0]
-        #     if actions.time <= next_time:
-        #         simulator.apply_actions(actions)
-        #         actions_list.pop(0)
 
         info_msg(f"Current time: {simulator.time}")
         simulator.step()

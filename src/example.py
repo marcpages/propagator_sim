@@ -8,8 +8,8 @@ try:
     from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
     from propagator.propagator import (
         Propagator,
-        PropagatorActions,
-        PropagatorBoundaryConditions,
+        Actions,
+        BoundaryConditions,
     )
 except ModuleNotFoundError:
     # Allow running without installing by adding src to path
@@ -19,8 +19,8 @@ except ModuleNotFoundError:
     from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs  # type: ignore
     from propagator.propagator import (  # type: ignore
         Propagator,
-        PropagatorActions,
-        PropagatorBoundaryConditions,
+        Actions,
+        BoundaryConditions,
     )
 # from propagator.settings import PropagatorSettings
 
@@ -72,8 +72,8 @@ simulator = Propagator(
 ignition_array = np.zeros(dem.shape, dtype=np.uint8)
 ignition_array[100:101, 100:101] = 1
 
-boundary_conditions_list: list[PropagatorBoundaryConditions] = [
-    PropagatorBoundaryConditions(
+boundary_conditions_list: list[BoundaryConditions] = [
+    BoundaryConditions(
         time=0,
         ignitions=ignition_array,
         wind_speed=np.ones(dem.shape) * 10,
@@ -81,7 +81,7 @@ boundary_conditions_list: list[PropagatorBoundaryConditions] = [
         moisture=np.ones(dem.shape) * 0.05,
     ),
 ]
-actions_list: list[PropagatorActions] = []
+actions_list: list[Actions] = []
 
 time_resolution = 60
 time_limit = 3600
