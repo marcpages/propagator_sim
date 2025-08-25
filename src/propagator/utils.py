@@ -1,6 +1,7 @@
 """Utility helpers for raster/vector IO and small geometry ops."""
 
-from typing import Iterable, Sequence
+from typing import TypeVar, Union
+
 import fiona
 import numpy as np
 import numpy.typing as npt
@@ -9,16 +10,19 @@ import utm
 from numpy import pi
 from rasterio import enums, transform, warp
 from rasterio.features import shapes
-from scipy.ndimage import filters
+from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.morphology import binary_dilation, binary_erosion
 from scipy.signal.signaltools import medfilt2d
 from shapely.geometry import LineString, MultiLineString, mapping, shape
 
+TIME_TAG = 'time'
 
-def normalize(angle_to_norm: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+# Define a type variable that can be either a float or a numpy array of floats
+T = TypeVar("T", bound=Union[float, npt.NDArray[np.floating]])
+
+def normalize(angle_to_norm: T) -> T:
     """Normalize an angle to the interval [-pi, pi)."""
-    return (angle_to_norm + pi) % (2 * pi) - pi
-
+    return (angle_to_norm + pi) % (2 * pi) - pi  # type: ignore[return-value]
 
 def add_point(
     img: npt.NDArray[np.floating], c: int, r: int, val: float
@@ -81,7 +85,7 @@ def add_segment(
 
 
 def add_line(
-    img: npt.NDArray[np.floating], cs: Sequence[int], rs: Sequence[int], val: float
+    img: npt.NDArray[np.floating], cs: npt.NDArray[np.integer], rs: npt.NDArray[np.integer], val: float
 ) -> list[tuple[int, int]]:
     """Rasterize a polyline defined by sequences `cs` and `rs` into `img`.
 
@@ -104,14 +108,14 @@ def add_line(
 
 
 def add_poly(
-    img: npt.NDArray[np.floating], cs: Sequence[int], rs: Sequence[int], val: float
+    img: npt.NDArray[np.floating], cs: npt.NDArray[np.integer], rs: npt.NDArray[np.integer], val: float
 ) -> list[tuple[int, int]]:
     """Fill a polygon defined by `cs` and `rs` into `img` with `val`.
 
     The polygon is closed automatically and a flood fill is used to write the
     interior. Returns the contour list of touched boundary points.
     """
-    img_temp = np.ones(img.shape)
+    img_temp = np.ones_like(img)
     contour = []
 
     for idx in range(len(cs) - 1):
@@ -178,6 +182,8 @@ def read_actions(
     for s in strings:
         f_type, values = s.split(":")
         values = values.replace("[", "").replace("]", "")
+        lats = None
+        lons = None
         if f_type == "POLYGON":
             s_lats, s_lons = values.split(";")
             lats = [float(sv) for sv in s_lats.split()]
@@ -197,11 +203,14 @@ def read_actions(
             lons = [lon]
             points.append((lat, lon))
 
+        if lats is None or lons is None:
+            raise ValueError("No valid actions found in input string")
+
         max_lat = max(max(lats), max_lat)
         min_lat = min(min(lats), min_lat)
         max_lon = max(max(lons), max_lon)
         min_lon = min(min(lons), min_lon)
-
+  
     mid_lat = (max_lat + min_lat) / 2
     mid_lon = (max_lon + min_lon) / 2
 
@@ -283,7 +292,7 @@ def trim_values(
     trim_values = values[min_row:max_row, min_col:max_col]
     rows, cols = trim_values.shape
 
-    (west, east), (north, south) = rio.transform.xy(
+    (west, east), (north, south) = transform.xy(
         src_trans, [min_row, max_row], [min_col, max_col], offset="ul"
     )
     trim_trans = transform.from_bounds(west, south, east, north, cols, rows)
@@ -305,7 +314,7 @@ def reproject(
         values, src_trans = trim_values(values, src_trans)
 
     rows, cols = values.shape
-    (west, east), (north, south) = rio.transform.xy(
+    (west, east), (north, south) = transform.xy(
         src_trans, [0, rows], [0, cols], offset="ul"
     )
 
@@ -321,7 +330,7 @@ def reproject(
             top=north,
             resolution=None,
         )
-        dst = np.empty((dh, dw))
+        dst = np.empty(shape=(dh, dw))  # type: ignore # warp calculate_default_transform returns inconsistent types
 
         warp.reproject(
             source=np.ascontiguousarray(values),
@@ -365,8 +374,8 @@ def smooth_linestring(linestring, smooth_sigma):
     """
     Uses a gauss filter to smooth out the LineString coordinates.
     """
-    smooth_x = np.array(filters.gaussian_filter1d(linestring.xy[0], smooth_sigma))
-    smooth_y = np.array(filters.gaussian_filter1d(linestring.xy[1], smooth_sigma))
+    smooth_x = np.array(gaussian_filter1d(linestring.xy[0], smooth_sigma))  # type: ignore # gaussian_filter1d has None typing in library
+    smooth_y = np.array(gaussian_filter1d(linestring.xy[1], smooth_sigma))  # type: ignore
 
     # close the linestring
     smooth_y[-1] = smooth_y[0]
@@ -406,12 +415,12 @@ def extract_isochrone(
     if np.sum(values > 0) <= 100:
         filt_values = values
     else:
-        filt_values = medfilt2d(values, med_filt_val)
+        filt_values = medfilt2d(values, med_filt_val)  # type: ignore # medfilt2d has None typing in library
     results = {}
 
     for t in thresholds:
         over_t_ = (filt_values >= t).astype("uint8")
-        over_t = binary_dilation(binary_erosion(over_t_).astype("uint8")).astype(
+        over_t = binary_dilation(binary_erosion(over_t_).astype("uint8")).astype(       # type: ignore #binary_erosion has None typing in library
             "uint8"
         )
         if np.any(over_t):
@@ -419,9 +428,9 @@ def extract_isochrone(
                 sh = shape(s)
 
                 ml = [
-                    smooth_linestring(l, smooth_sigma)  # .simplify(simp_fact)
-                    for l in sh.interiors
-                    if l.length > min_length
+                    smooth_linestring(interior_line, smooth_sigma)  # .simplify(simp_fact)
+                    for interior_line in sh.interiors                   # type: ignore # sh.interiors is missing in typing
+                    if interior_line.length > min_length
                 ]
 
                 results[t] = MultiLineString(ml)
@@ -466,23 +475,3 @@ def save_isochrones(results, filename: str, format: str = "geojson") -> None:
         with open(filename, "w") as f:
             f.write(json.dumps(geojson_obj))
 
-
-if __name__ == "__main__":
-    grid_dim = 1000
-    tileset = DEFAULT_TAG
-    s1 = [
-        "LINE:[44.3204247306364 44.320317268240956 ];[8.44812858849764 8.449995405972006 ]",
-        "POLYGON:[44.32214410219511 44.320869929892176 44.32083922660368 44.32214410219511 ];[8.454050906002523 8.453171141445639 8.45463026314974 8.454050906002523 ]",
-        "POINT:44.32372526549074;8.45040310174227",
-    ]
-    ignition_string = "\n".join(s1)
-    mid_lat, mid_lon, polys, lines, points = read_actions(ignition_string)
-    easting, northing, zone_number, zone_letter = utm.from_latlon(mid_lat, mid_lon)
-    src, west, north, step_x, step_y = load_tiles(
-        zone_number, easting, northing, grid_dim, "prop", tileset
-    )
-
-    dst, dst_trans, dst_crs = reproject(
-        src, (west, north, step_x, step_y), zone_number, zone_letter
-    )
-    write_geotiff("test_latolng.tiff", dst, dst_trans, dst_crs)

@@ -122,6 +122,6 @@ class BoundaryConditionsInput(BaseModel):
     def get_propagator_action(
         self,
         geo_info: GeographicInfo
-    ) -> PropagatorActions:
+    ) -> list[PropagatorActions]:
         """Convert to PropagatorActions."""
         return []
