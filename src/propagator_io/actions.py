@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 from functools import lru_cache
 from scipy import ndimage
+from collections import defaultdict
 
 from propagator_io.geometry import Geometry, GeometryParser
 from propagator_io.geo import GeographicInfo
@@ -237,24 +238,27 @@ def parse_actions(
 ) -> tuple[list[Action], set[str]]:
     reg = get_action_registry()
     valid_names = _action_name_set()
-    actions: list[Action] = []
+    # 1) gather geometries per action type
+    acc: dict[ActionType, list[Geometry]] = defaultdict(list)
     consumed: set[str] = set()
-    # Iterate over a copy since we may remove keys
     for key, raw in list(data.items()):
-        # Is this key the name of an action?
+        # skip non-actions or empty payloads
         if key not in valid_names or not raw:
             continue
         atype = ActionType(key)
-        cls = reg[atype]
+        cls = reg.get(atype)
         if cls is None:
+            # unknown/unregistered action -> ignore
             continue
         allowed = {k.value for k in cls.allowed_kinds()}
-        if isinstance(raw, list) and (not raw or
-                                      isinstance(raw[0], (str, dict))):
-            geoms = GeometryParser.parse_geometry_list(
-                raw, allowed=allowed, epsg=epsg)
-        else:
-            geoms = raw  # assume already parsed to Geometry objects
+        geoms = GeometryParser.parse_geometry_list(
+                    raw, allowed=allowed, epsg=epsg)
+        if geoms:
+            acc[atype].extend(geoms)
+            consumed.add(key)
+    # build a single Action per type with merged geometries
+    actions: list[Action] = []
+    for atype, geoms in acc.items():
+        cls = reg[atype]
         actions.append(cls(geometries=geoms))
-        consumed.add(key)
     return actions, consumed
