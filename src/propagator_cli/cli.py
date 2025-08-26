@@ -111,7 +111,7 @@ def main():
     veg = loader.get_veg()
     geo_info = loader.get_geo_info()
 
-    geotiff_writer = GeoTiffWriter(
+    raster_writer = GeoTiffWriter(
         output_folder=cfg.output,
         prefix="fire_probability",
         dst_trans=geo_info.trans,
@@ -158,7 +158,7 @@ def main():
         if simulator.time % cfg.time_resolution == 0:
             output = simulator.get_output()
             # Save the output to the specified folder
-            geotiff_writer.write_raster(
+            raster_writer.write_raster(
                 output.fire_probability,
                 c_time=simulator.time,
                 ref_date=ref_date
