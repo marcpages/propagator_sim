@@ -7,6 +7,7 @@ from warnings import warn
 import numpy as np
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pyproj import CRS, Proj
 
 from propagator.propagator import Propagator
 from propagator_cli.console import info_msg, ok_msg, setup_console
@@ -121,16 +122,17 @@ def main():
     dem = loader.get_dem()
     veg = loader.get_veg()
     geo_info = loader.get_geo_info()
+    dst_prj = Proj(CRS.from_epsg(4326).to_proj4())
 
     raster_writer = GeoTiffWriter(
         start_date=cfg.init_date,
         raster_variables_mapping={
             "fire_probability": lambda output: output.fire_probability,
-            # "fireline_intensity_mean": lambda output: output.fireline_int_mean,
+            "fireline_intensity_mean": lambda output: output.fli_mean,
         },
         output_folder=cfg.output,
-        dst_trans=geo_info.trans,
-        dst_crs=geo_info.prj.crs,
+        geo_info=geo_info,
+        dst_prj=dst_prj,
     )
 
     metadata_writer = MetadataJSONWriter(
@@ -141,10 +143,9 @@ def main():
         start_date=cfg.init_date,
         output_folder=cfg.output,
         prefix="isochrones",
-        dst_trans=geo_info.trans,
-        dst_crs=geo_info.prj.crs,
-        thresholds=[0.9, 0.95]
-        
+        thresholds=[0.9, 0.95],
+        geo_info=geo_info,
+        dst_prj=dst_prj,
     )
 
     writer = OutputWriter(

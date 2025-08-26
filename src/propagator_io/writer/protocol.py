@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from typing import Optional, Protocol
 
 from propagator.models import PropagatorOutput
+from propagator_io.geo import GeographicInfo
+from pyproj import Proj
 
 
 class BaseWriterProtocol(Protocol):
@@ -14,6 +16,9 @@ class BaseWriterProtocol(Protocol):
 
 
 class RasterWriterProtocol(BaseWriterProtocol):
+    geo_info: GeographicInfo
+    dst_prj: Proj
+
     def write_rasters(
         self,
         output: PropagatorOutput,
@@ -25,6 +30,9 @@ class MetadataWriterProtocol(BaseWriterProtocol):
 
 
 class IsochronesWriterProtocol(BaseWriterProtocol):
+    geo_info: GeographicInfo
+    dst_prj: Proj
+
     def write_isochrones(
         self,
         output: PropagatorOutput,

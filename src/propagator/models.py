@@ -85,8 +85,8 @@ class PropagatorOutput:
     fire_probability: npt.NDArray[np.floating]
     ros_mean: npt.NDArray[np.floating]
     ros_max: npt.NDArray[np.floating]
-    fireline_int_mean: npt.NDArray[np.floating]
-    fireline_int_max: npt.NDArray[np.floating]
+    fli_mean: npt.NDArray[np.floating]
+    fli_max: npt.NDArray[np.floating]
     stats: PropagatorStats
 
 
