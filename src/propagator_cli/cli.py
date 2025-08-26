@@ -1,17 +1,17 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Literal, Optional
 
+import numpy as np
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from propagator.propagator import Propagator
+from propagator_cli.console import info_msg, ok_msg, setup_console
 from propagator_io.configuration import PropagatorConfigurationLegacy
 from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
-from propagator.propagator import Propagator
-import numpy as np
-
-from propagator_cli.console import info_msg, ok_msg, setup_console
+from propagator_io.output import write_geotiff_output, write_json_metadata
 
 
 # --- CLI configuration -------------------------------------------------------
@@ -137,14 +137,31 @@ def main():
         if next_time is None:
             break
 
-        info_msg(f"Current time: {simulator.time}")
+
         simulator.step()
-        info_msg(f"New time: {simulator.time}")
+        ref_date=cfg.init_date + timedelta(minutes=simulator.time)
+
+        info_msg(f"Time: {simulator.time} -> {ref_date}")
 
         if simulator.time % cfg.time_resolution == 0:
-            _output = simulator.get_output()
+            output = simulator.get_output()
             # Save the output to the specified folder
-            ...
+            write_geotiff_output(
+                output.fire_probability,
+                geo_info.trans,
+                geo_info.prj.crs,
+                cli.output,
+                prefix="fire_probability",
+                c_time=simulator.time,
+            )
+
+            write_json_metadata(
+                output.stats,
+                cli.output,
+                prefix="metadata",
+                c_time=simulator.time,
+                ref_date=ref_date
+            )
 
         if simulator.time > cfg.time_limit:
             break

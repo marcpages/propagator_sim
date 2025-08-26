@@ -1,5 +1,6 @@
 """Utility helpers for raster/vector IO and small geometry ops."""
 
+from pathlib import Path
 from typing import TypeVar, Union
 
 import fiona
@@ -347,11 +348,11 @@ def reproject(
 
 
 def write_geotiff(
-    filename: str,
+    filename: str|Path,
     values: npt.NDArray[np.floating] | npt.NDArray[np.integer],
     dst_trans,
     dst_crs,
-    dtype=np.uint8,
+    dtype: npt.DTypeLike = np.uint8,
 ) -> None:
     """Write a single-band GeoTIFF with provided transform and CRS."""
     with rio.Env():

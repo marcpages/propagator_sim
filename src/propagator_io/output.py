@@ -1,36 +1,40 @@
-from datetime import timedelta
-import datetime
 import json
-import os
+from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 from pyproj import CRS
+from rasterio.transform import Affine
 
+from propagator.models import PropagatorStats
 from propagator.utils import write_geotiff
 
 
-def write_output(
+def write_geotiff_output(
     values: np.ndarray,
-    dst_trans: CRS,
+    dst_trans: Affine,
     dst_crs: CRS,
-    output_folder: str,
-    c_time: int,
-    init_date: datetime,
+    output_folder: Path,
     prefix: str,
-    **kwargs,
+    c_time: int,
 ) -> None:
-    filename = os.path.join(output_folder, f"{prefix}_" + str(c_time))
-    tiff_file = filename + ".tiff"
-    json_file = filename + ".json"
+    tiff_file = output_folder / f"{prefix}_{c_time}.tiff"
+    # now it returns the RoS in m/h
+    write_geotiff(tiff_file, values, dst_trans, dst_crs, values.dtype)
 
-    ref_date = str(init_date + timedelta(minutes=c_time))
+
+def write_json_metadata(
+        stats: PropagatorStats, 
+        output_folder: Path,
+        prefix: str,
+        c_time: int,
+        ref_date: datetime
+    ) -> None:
+    json_file = output_folder / f"{prefix}_{c_time}.json"
     with open(json_file, "w") as fp:
-        meta = dict(time=c_time, timeref=ref_date)
-        meta.update(kwargs)
-        json.dump(meta, fp)
+        data = stats.to_dict(c_time, ref_date)
+        json.dump(data, fp)
 
-        # now it returns the RoS in m/h
-        write_geotiff(tiff_file, values, dst_trans, dst_crs, values.dtype)
 
 
 # def __update_isochrones(self, isochrones, values, dst_trans):

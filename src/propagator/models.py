@@ -6,8 +6,9 @@ moisture inputs. Public dataclasses capture boundary conditions, actions,
 summary statistics, and output snapshots suitable for CLI and IO layers.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Protocol, Optional
+from dataclasses import dataclass
+from datetime import datetime
+from typing import List, Optional, Protocol
 
 import numpy as np
 import numpy.typing as npt
@@ -58,25 +59,34 @@ class BoundaryConditions:
 @dataclass(frozen=True)
 class PropagatorStats:
     """Summary statistics for the current simulation state."""
-
     n_active: int
     area_mean: float
     area_50: float
     area_75: float
     area_90: float
 
+    def to_dict(self, c_time: int, ref_date: datetime) -> dict[str, float|int|str]:
+        return dict(
+            c_time=c_time,
+            ref_date=ref_date.isoformat(),
+            n_active=self.n_active,
+            area_mean=self.area_mean,
+            area_50=self.area_50,
+            area_75=self.area_75,
+            area_90=self.area_90,
+        )
 
 @dataclass(frozen=True)
 class PropagatorOutput:
     """Snapshot of simulation outputs at a given time step."""
 
     time: int
-    fire_probability: Optional[npt.NDArray[np.floating]]  = None
-    ros_mean: Optional[npt.NDArray[np.floating]]  = None
-    ros_max: Optional[npt.NDArray[np.floating]]  = None
-    fireline_int_mean: Optional[npt.NDArray[np.floating]]  = None
-    fireline_int_max: Optional[npt.NDArray[np.floating]]  = None
-    stats: Optional[PropagatorStats]  = field(default=None)
+    fire_probability: npt.NDArray[np.floating]
+    ros_mean: npt.NDArray[np.floating]
+    ros_max: npt.NDArray[np.floating]
+    fireline_int_mean: npt.NDArray[np.floating]
+    fireline_int_max: npt.NDArray[np.floating]  
+    stats: PropagatorStats
 
 
 
