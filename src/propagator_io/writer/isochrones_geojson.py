@@ -150,7 +150,7 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
             crs=self.dst_crs.to_epsg(),
             columns=["geometry", "date"],
             geometry="geometry",
-            index=pd.MultiIndex.from_arrays([[], []], names=["threshold", "time"])
+            index=pd.MultiIndex.from_arrays([[], []], names=["threshold", "time"]),
         )
 
     def write_isochrones(self, output: PropagatorOutput) -> None:

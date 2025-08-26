@@ -20,9 +20,7 @@ from propagator.propagator import (
 )
 from propagator_io.boundary_conditions import TimedInput
 from propagator_io.geo import GeographicInfo
-from propagator_io.geometry import (
-    DEFAULT_EPSG_GEOMETRY, Geometry, GeometryParser
-)
+from propagator_io.geometry import DEFAULT_EPSG_GEOMETRY, Geometry, GeometryParser
 
 
 # ---- configuration ----------------------------------------------------------
@@ -138,10 +136,7 @@ class PropagatorConfigurationLegacy(BaseModel):
         bcs = data.get("boundary_conditions")
         if isinstance(bcs, list):
             data["boundary_conditions"] = [
-                TimedInput.model_validate(
-                    bc,
-                    context={"epsg": epsg})
-                for bc in bcs
+                TimedInput.model_validate(bc, context={"epsg": epsg}) for bc in bcs
             ]
         return data
 

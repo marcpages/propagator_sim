@@ -186,11 +186,7 @@ class GeometryParser:
         raise ValueError(f"Unsupported geometry string: {s!r}")
 
     @staticmethod
-    def parse_geometry_list(
-        v: list,
-        allowed: set[str],
-        epsg: int
-    ) -> List[Geometry]:
+    def parse_geometry_list(v: list, allowed: set[str], epsg: int) -> List[Geometry]:
         if not isinstance(v, list):
             raise ValueError("expected a list")
         out: List[Geometry] = []

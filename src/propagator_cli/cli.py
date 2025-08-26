@@ -62,12 +62,16 @@ class PropagatorCLILegacy(BaseSettings):
     def _check_mode_files(self):
         if self.mode == "geotiff":
             if self.dem is None or self.fuel is None:
-                raise ValueError("DEM and FUEL files must be \
-                    provided in 'geotiff' mode")
+                raise ValueError(
+                    "DEM and FUEL files must be \
+                    provided in 'geotiff' mode"
+                )
         elif self.mode == "tileset":
             if self.dem is not None or self.fuel is not None:
-                warn("DEM and FUEL files shouldn't be \
-                    provided in 'tileset' mode and will be ignored.")
+                warn(
+                    "DEM and FUEL files shouldn't be \
+                    provided in 'tileset' mode and will be ignored."
+                )
         return self
 
     def build_configuration(self) -> PropagatorConfigurationLegacy:
@@ -77,6 +81,7 @@ class PropagatorCLILegacy(BaseSettings):
             json_cfg = json.load(f)
         # CLI values override JSON if both are provided
         return PropagatorConfigurationLegacy(**json_cfg, **self.model_dump())
+
 
 # --- main function -----------------------------------------------------------
 def main():

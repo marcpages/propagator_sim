@@ -96,10 +96,7 @@ class TimedInput(BaseModel):
                 data.pop(k, None)
         return data
 
-    def get_boundary_conditions(
-            self,
-            geo_info: GeographicInfo
-    ) -> BoundaryConditions:
+    def get_boundary_conditions(self, geo_info: GeographicInfo) -> BoundaryConditions:
         # rasterize weather conditions > so far given as scalars
         w_speed_arr = np.ones(geo_info.shape) * self.w_speed
         w_dir_arr = np.ones(geo_info.shape) * self.w_dir
@@ -118,22 +115,23 @@ class TimedInput(BaseModel):
             )
 
         if self.actions is not None:
-            additional_moisture = np.full(geo_info.shape,
-                                          fill_value=NO_MOIST_ACTION,
-                                          dtype=float)
-            vegetation_changes = np.full(geo_info.shape,
-                                         fill_value=NO_FUEL_ACTION,
-                                         dtype=float)
+            additional_moisture = np.full(
+                geo_info.shape, fill_value=NO_MOIST_ACTION, dtype=float
+            )
+            vegetation_changes = np.full(
+                geo_info.shape, fill_value=NO_FUEL_ACTION, dtype=float
+            )
             for action in self.actions:
                 moist_action, fuel_action = action.rasterize_action(
                     geo_info,
-                    non_vegetated=0.0  # hardcoded for now
+                    non_vegetated=0.0,  # hardcoded for now
                 )
                 # accumulate actions
                 additional_moisture += moist_action
                 # substitute fuel actions (last one wins)
-                np.putmask(vegetation_changes, fuel_action != NO_FUEL_ACTION,
-                           fuel_action)
+                np.putmask(
+                    vegetation_changes, fuel_action != NO_FUEL_ACTION, fuel_action
+                )
 
         # convert info in Propagator BoundaryConditions
         return BoundaryConditions(
@@ -143,5 +141,5 @@ class TimedInput(BaseModel):
             moisture=moisture_arr,
             ignition_mask=ignition_mask,
             additional_moisture=additional_moisture,
-            vegetation_changes=vegetation_changes
+            vegetation_changes=vegetation_changes,
         )
