@@ -2,14 +2,15 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, Optional
+from warnings import warn
+import numpy as np
 
-from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator, model_validator
 
 from propagator_io.configuration import PropagatorConfigurationLegacy
 from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
 from propagator.propagator import Propagator
-import numpy as np
 
 from propagator_cli.console import info_msg, ok_msg, setup_console
 
@@ -57,18 +58,29 @@ class PropagatorCLILegacy(BaseSettings):
             raise ValueError("Configuration file not found.")
         return v
 
+    @model_validator(mode="after")
+    def _check_mode_files(self):
+        if self.mode == "geotiff":
+            if self.dem is None or self.fuel is None:
+                raise ValueError("DEM and FUEL files must be \
+                    provided in 'geotiff' mode")
+        elif self.mode == "tileset":
+            if self.dem is not None or self.fuel is not None:
+                warn("DEM and FUEL files shouldn't be \
+                    provided in 'tileset' mode and will be ignored.")
+        return self
+
     def build_configuration(self) -> PropagatorConfigurationLegacy:
         """Merge CLI config and JSON config into one validated object.
         NOTE: CLI config override JSON config in case of overlapping"""
         with open(self.config) as f:
             json_cfg = json.load(f)
-
         # CLI values override JSON if both are provided
         return PropagatorConfigurationLegacy(**json_cfg,
                                              **self.model_dump())
 
 
-
+# --- main function -----------------------------------------------------------
 def main():
     simulation_time = datetime.now()
 
@@ -99,7 +111,7 @@ def main():
 
     if cfg.dem is None or cfg.fuel is None:
         raise ValueError("DEM and FUEL files must be provided in 'geotiff' mode")
-    
+
     # loader geographic information
     loader = PropagatorDataFromGeotiffs(
         dem_file=str(cfg.dem),
