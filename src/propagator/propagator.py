@@ -645,9 +645,6 @@ class Propagator:
             int | None: 0 at initialization; None if no more events; otherwise
             the next scheduled simulation time.
         """
-        if self.time == 0:
-            return 0
-
         if len(self.scheduler) == 0:
             return None
 
