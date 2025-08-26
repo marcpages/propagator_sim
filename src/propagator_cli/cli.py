@@ -143,6 +143,8 @@ def main():
         prefix="isochrones",
         dst_trans=geo_info.trans,
         dst_crs=geo_info.prj.crs,
+        thresholds=[0.9, 0.95]
+        
     )
 
     writer = OutputWriter(

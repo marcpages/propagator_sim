@@ -137,11 +137,11 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
     dst_trans: Affine
     dst_crs: CRS
 
-    thresholds = ([0.5, 0.75, 0.9],)
-    med_filt_val = (9,)
-    min_length = (0.0001,)
-    smooth_sigma = (0.8,)
-    simp_fact = (0.00001,)
+    thresholds: list[float] = field(default_factory=lambda: [0.5, 0.75, 0.9])
+    med_filt_val: int = 9
+    min_length: float = 0.0001
+    smooth_sigma: float = 0.8
+    simp_fact: float = 0.00001
 
     _isochrones: gpd.GeoDataFrame = field(init=False)
 
@@ -156,7 +156,7 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
     def write_isochrones(self, output: PropagatorOutput) -> None:
         json_file = self.output_folder / f"{self.prefix}_{output.time}.json"
         ref_date = self.ref_date(output)
-        isochrones_geoms = extract_isochrone(output.fire_probability, self.dst_trans)
+        isochrones_geoms = extract_isochrone(output.fire_probability, self.dst_trans, thresholds=self.thresholds, med_filt_val=self.med_filt_val, min_length=self.min_length, smooth_sigma=self.smooth_sigma, simp_fact=self.simp_fact)
 
         # iterate over threshold/geometry and add it to the _isochrones
         for threshold, geom in isochrones_geoms.items():
