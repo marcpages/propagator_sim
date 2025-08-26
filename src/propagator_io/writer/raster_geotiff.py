@@ -6,96 +6,25 @@ from typing import Callable
 import numpy as np
 import numpy.typing as npt
 import rasterio as rio
-from pyproj import CRS
-from rasterio import enums, transform, warp
+
+from propagator.models import PropagatorOutput
+from propagator_io.geo import reproject, trim_values, GeographicInfo
+from pyproj import Proj
 from rasterio.transform import Affine
+from rasterio.crs import CRS
 
 from .protocol import RasterWriterProtocol
-from propagator.models import PropagatorOutput
-
-
-def reproject(
-    values: npt.NDArray[np.floating],
-    src_trans,
-    src_crs,
-    dst_crs,
-    trim: bool = True,
-):
-    """Reproject a raster (optionally trimmed) to a different CRS.
-
-    Returns `(dst, dst_trans)` with the new raster array and affine transform.
-    """
-    if trim:
-        values, src_trans = trim_values(values, src_trans)
-
-    rows, cols = values.shape
-    (west, east), (north, south) = transform.xy(
-        src_trans, [0, rows], [0, cols], offset="ul"
-    )
-
-    with rio.Env():
-        dst_trans, dw, dh = warp.calculate_default_transform(
-            src_crs=src_crs,
-            dst_crs=dst_crs,
-            width=cols,
-            height=rows,
-            left=west,
-            bottom=south,
-            right=east,
-            top=north,
-            resolution=None,
-        )
-        dst = np.empty(shape=(dh, dw))  # type: ignore # warp calculate_default_transform returns inconsistent types
-
-        warp.reproject(
-            source=np.ascontiguousarray(values),
-            destination=dst,
-            src_crs=src_crs,
-            dst_crs=dst_crs,
-            dst_transform=dst_trans,
-            src_transform=src_trans,
-            resampling=enums.Resampling.nearest,
-            num_threads=1,
-        )
-
-    return dst, dst_trans
-
-
-def trim_values(
-    values: npt.NDArray[np.floating],
-    src_trans,
-):
-    """Trim a values raster around non-zero area and return new transform."""
-    rows, cols = values.shape
-    min_row, max_row = int(rows / 2 - 1), int(rows / 2 + 1)
-    min_col, max_col = int(cols / 2 - 1), int(cols / 2 + 1)
-
-    v_rows = np.where(values.sum(axis=1) > 0)[0]
-    if len(v_rows) > 0:
-        min_row, max_row = v_rows[0] - 1, v_rows[-1] + 2
-
-    v_cols = np.where(values.sum(axis=0) > 0)[0]
-    if len(v_cols) > 0:
-        min_col, max_col = v_cols[0] - 1, v_cols[-1] + 2
-
-    trim_values = values[min_row:max_row, min_col:max_col]
-    rows, cols = trim_values.shape
-
-    (west, east), (north, south) = transform.xy(
-        src_trans, [min_row, max_row], [min_col, max_col], offset="ul"
-    )
-    trim_trans = transform.from_bounds(west, south, east, north, cols, rows)
-    return trim_values, trim_trans
 
 
 def write_geotiff(
     filename: str | Path,
     values: npt.NDArray[np.floating] | npt.NDArray[np.integer],
-    dst_trans,
-    dst_crs,
+    dst_trans: Affine,
+    dst_prj: Proj,
     dtype: npt.DTypeLike = np.uint8,
 ) -> None:
     """Write a single-band GeoTIFF with provided transform and CRS."""
+    dst_crs = CRS.from_proj4(dst_prj.srs)
     with rio.Env():
         with rio.open(
             filename,
@@ -115,19 +44,35 @@ def write_geotiff(
 @dataclass
 class GeoTiffWriter(RasterWriterProtocol):
     start_date: datetime
-    dst_trans: Affine
-    dst_crs: CRS
     output_folder: Path
     raster_variables_mapping: dict[
         str,
-        Callable[
-            [PropagatorOutput], npt.NDArray[np.floating] | npt.NDArray[np.integer]
-        ],
+        Callable[[PropagatorOutput], npt.NDArray[np.floating]],
     ]
+    geo_info: GeographicInfo
+    dst_prj: Proj
+
+    trim: bool = True
 
     def write_rasters(self, output: PropagatorOutput) -> None:
         for key, fun in self.raster_variables_mapping.items():
             values = fun(output)
+            dst_trans = self.geo_info.trans
+            dst_prj = self.geo_info.prj
+
+            if self.geo_info.prj != self.dst_prj:
+                dst_prj = self.dst_prj
+                values, dst_trans = reproject(
+                    values,
+                    self.geo_info.trans,
+                    self.geo_info.prj,
+                    dst_prj,
+                    trim=self.trim,
+                )
+                
+            elif self.trim:
+                values, dst_trans = trim_values(values, dst_trans)
+
             tiff_file = self.output_folder / f"{key}_{output.time}.tiff"
             # now it returns the RoS in m/h
-            write_geotiff(tiff_file, values, self.dst_trans, self.dst_crs, values.dtype)
+            write_geotiff(tiff_file, values, dst_trans, dst_prj, values.dtype)

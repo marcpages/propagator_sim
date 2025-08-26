@@ -7,7 +7,6 @@ import geopandas as gpd
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-from pyproj import CRS
 from rasterio.features import shapes
 from rasterio.transform import Affine
 from scipy.ndimage.filters import gaussian_filter1d
@@ -16,6 +15,9 @@ from scipy.signal.signaltools import medfilt2d
 from shapely.geometry import LineString, MultiLineString, mapping, shape
 
 from propagator.models import PropagatorOutput
+from propagator_io.geo import reproject, GeographicInfo
+from pyproj import Proj
+
 from propagator_io.writer.protocol import IsochronesWriterProtocol
 
 TIME_TAG = "time"
@@ -134,8 +136,9 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
     start_date: datetime
     output_folder: Path
     prefix: str
-    dst_trans: Affine
-    dst_crs: CRS
+    geo_info: GeographicInfo
+    dst_prj: Proj
+
 
     thresholds: list[float] = field(default_factory=lambda: [0.5, 0.75, 0.9])
     med_filt_val: int = 9
@@ -147,7 +150,7 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
 
     def __post_init__(self):
         self._isochrones = gpd.GeoDataFrame(
-            crs=self.dst_crs.to_epsg(),
+            crs=self.dst_prj.to_proj4(),
             columns=["geometry", "date"],
             geometry="geometry",
             index=pd.MultiIndex.from_arrays([[], []], names=["threshold", "time"]),
@@ -156,7 +159,27 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
     def write_isochrones(self, output: PropagatorOutput) -> None:
         json_file = self.output_folder / f"{self.prefix}_{output.time}.json"
         ref_date = self.ref_date(output)
-        isochrones_geoms = extract_isochrone(output.fire_probability, self.dst_trans, thresholds=self.thresholds, med_filt_val=self.med_filt_val, min_length=self.min_length, smooth_sigma=self.smooth_sigma, simp_fact=self.simp_fact)
+
+        values = output.fire_probability
+        dst_trans = self.geo_info.trans
+        prj = self.geo_info.prj
+        if prj != self.dst_prj:
+            values, dst_trans = reproject(
+                values,
+                self.geo_info.trans,
+                self.geo_info.prj,
+                self.dst_prj,
+            )
+
+        isochrones_geoms = extract_isochrone(
+            values,
+            dst_trans,
+            thresholds=self.thresholds,
+            med_filt_val=self.med_filt_val,
+            min_length=self.min_length,
+            smooth_sigma=self.smooth_sigma,
+            simp_fact=self.simp_fact,
+        )
 
         # iterate over threshold/geometry and add it to the _isochrones
         for threshold, geom in isochrones_geoms.items():

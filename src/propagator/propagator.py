@@ -111,7 +111,7 @@ class Propagator:
         numpy.ndarray
             2D array with values in [0, 1].
         """
-        values = np.mean(self.fire, axis=2)
+        values = np.mean(self.fire, axis=2).astype(np.float32)
         return values
 
     def compute_ros_max(self) -> npt.NDArray[np.floating]:
@@ -122,7 +122,7 @@ class Propagator:
         numpy.ndarray
             2D array with max RoS per cell.
         """
-        RoS_max = np.max(self.ros, axis=2)
+        RoS_max = np.max(self.ros, axis=2).astype(np.float32)
         return RoS_max
 
     def compute_ros_mean(self) -> npt.NDArray[np.floating]:
@@ -134,7 +134,7 @@ class Propagator:
             2D array with mean RoS per cell.
         """
         RoS_m = np.where(self.ros > 0, self.ros, np.nan)
-        RoS_mean = np.nanmean(RoS_m, axis=2)
+        RoS_mean = np.nanmean(RoS_m, axis=2).astype(np.float32)
         RoS_mean = np.where(RoS_mean > 0, RoS_mean, 0)
         return RoS_mean
 
@@ -146,7 +146,7 @@ class Propagator:
         numpy.ndarray
             2D array of max intensity values.
         """
-        fl_I_max = np.nanmax(self.fireline_int, axis=2)
+        fl_I_max = np.nanmax(self.fireline_int, axis=2).astype(np.float32)
         return fl_I_max
 
     def compute_fireline_int_mean(self) -> npt.NDArray[np.floating]:
@@ -158,7 +158,7 @@ class Propagator:
             2D array of mean intensity values.
         """
         fl_I_m = np.where(self.fireline_int > 0, self.fireline_int, np.nan)
-        fl_I_mean = np.nanmean(fl_I_m, axis=2)
+        fl_I_mean = np.nanmean(fl_I_m, axis=2).astype(np.float32)
         fl_I_mean = np.where(fl_I_mean > 0, fl_I_mean, 0)
         return fl_I_mean
 
@@ -632,8 +632,8 @@ class Propagator:
             fire_probability=fire_probability,
             ros_mean=ros_mean,
             ros_max=ros_max,
-            fireline_int_mean=fireline_intensity_mean,
-            fireline_int_max=fireline_intensity_max,
+            fli_mean=fireline_intensity_mean,
+            fli_max=fireline_intensity_max,
             stats=stats,
         )
 
@@ -645,9 +645,6 @@ class Propagator:
             int | None: 0 at initialization; None if no more events; otherwise
             the next scheduled simulation time.
         """
-        if self.time == 0:
-            return 0
-
         if len(self.scheduler) == 0:
             return None
 

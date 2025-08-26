@@ -382,9 +382,9 @@ def test_get_output(sample_propagator, monkeypatch):
         assert np.allclose(out.ros_mean, prop.compute_ros_mean())
     if out.ros_max is not None:
         assert np.allclose(out.ros_max, prop.compute_ros_max())
-    if out.fireline_int_mean is not None:
-        assert np.allclose(out.fireline_int_mean, prop.compute_fireline_int_mean())
-    if out.fireline_int_max is not None:
-        assert np.allclose(out.fireline_int_max, prop.compute_fireline_int_max())
+    if out.fli_mean is not None:
+        assert np.allclose(out.fli_mean, prop.compute_fireline_int_mean())
+    if out.fli_max is not None:
+        assert np.allclose(out.fli_max, prop.compute_fireline_int_max())
     assert isinstance(out.stats, PropagatorStats)
 

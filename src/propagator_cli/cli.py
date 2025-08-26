@@ -7,11 +7,14 @@ from warnings import warn
 import numpy as np
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pyproj import CRS, Proj
 
 from propagator.propagator import Propagator
 from propagator_cli.console import info_msg, ok_msg, setup_console
 from propagator_io.configuration import PropagatorConfigurationLegacy
 from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
+from propagator_io.loader.tiles import PropagatorDataFromTiles
+from propagator_io.loader.protocol import PropagatorInputDataProtocol
 from propagator_io.writer import (
     GeoTiffWriter,
     MetadataJSONWriter,
@@ -25,8 +28,8 @@ class PropagatorCLILegacy(BaseSettings):
     model_config = SettingsConfigDict(cli_parse_args=True)
 
     config: Path = Field(..., description="Path to configuration file (JSON)")
-    mode: Literal["tileset", "geotiff"] = Field(
-        "tileset",
+    mode: Literal["tiles", "geotiff"] = Field(
+        "tiles",
         description="Mode of static data load: 'tileset' for automatic, "
         "'geotiff' for giving DEM and FUEL in input.",
     )
@@ -38,6 +41,18 @@ class PropagatorCLILegacy(BaseSettings):
         None,
         description="Path to FUEL file (GeoTIFF), required in 'geotiff' mode",
     )
+
+    tilespath: Optional[Path] = Field(
+        None,
+        description="Base Path to TILES file (GeoTIFF), required in 'tiles' mode",
+    )
+
+    tileset: Optional[str] = Field(
+        None,
+        description="Tileset to be used in 'tiles' mode (default: 'default')",
+    )
+
+
     output: Path = Field(
         ...,
         description="Path to output folder where results will be saved",
@@ -66,12 +81,26 @@ class PropagatorCLILegacy(BaseSettings):
                     "DEM and FUEL files must be \
                     provided in 'geotiff' mode"
                 )
-        elif self.mode == "tileset":
+            if self.tileset is not None:
+                warn(
+                    "TILESET will be ignored in 'geotiff' mode"
+                )
+            if self.tilespath is not None:
+                warn(
+                    "TILESPATH will be ignored in 'geotiff' mode"
+                )
+
+        elif self.mode == "tiles":
             if self.dem is not None or self.fuel is not None:
                 warn(
                     "DEM and FUEL files shouldn't be \
-                    provided in 'tileset' mode and will be ignored."
+                    provided in 'tiles' mode and will be ignored."
                 )
+            if self.tilespath is None:
+                raise ValueError("TILESPATH path must be provided in 'tiles' mode")
+            
+            if not self.tilespath.exists():
+                raise ValueError(f"TILESPATH path {self.tilespath} does not exist")
         return self
 
     def build_configuration(self) -> PropagatorConfigurationLegacy:
@@ -108,29 +137,39 @@ def main():
     prob_table = np.loadtxt("example/prob_table.txt")
     p_veg = np.loadtxt("example/p_vegetation.txt")
 
-    if cfg.dem is None or cfg.fuel is None:
-        raise ValueError("DEM and FUEL files must be provided in 'geotiff' mode")
-
-    # loader geographic information
-    loader = PropagatorDataFromGeotiffs(
-        dem_file=str(cfg.dem),
-        veg_file=str(cfg.fuel),
-    )
+    loader: PropagatorInputDataProtocol
+    if cli.mode == "tiles":
+        loader = PropagatorDataFromTiles(
+            base_path=str(cfg.tilespath),
+            tileset=cli.tileset if cli.tileset is not None else "default",
+            mid_lat=0,
+            mid_lon=0,
+            grid_dim=2000,
+        )
+    elif cli.mode == "geotiff":
+        # loader geographic information
+        loader = PropagatorDataFromGeotiffs(
+            dem_file=str(cfg.dem),
+            veg_file=str(cfg.fuel),
+        )
+    else: 
+        raise ValueError(f"Unknown mode {cli.mode}")
 
     # Load the data
     dem = loader.get_dem()
     veg = loader.get_veg()
     geo_info = loader.get_geo_info()
+    dst_prj = Proj(CRS.from_epsg(4326).to_proj4())
 
     raster_writer = GeoTiffWriter(
         start_date=cfg.init_date,
         raster_variables_mapping={
             "fire_probability": lambda output: output.fire_probability,
-            # "fireline_intensity_mean": lambda output: output.fireline_int_mean,
+            "fireline_intensity_mean": lambda output: output.fli_mean,
         },
         output_folder=cfg.output,
-        dst_trans=geo_info.trans,
-        dst_crs=geo_info.prj.crs,
+        geo_info=geo_info,
+        dst_prj=dst_prj,
     )
 
     metadata_writer = MetadataJSONWriter(
@@ -141,10 +180,9 @@ def main():
         start_date=cfg.init_date,
         output_folder=cfg.output,
         prefix="isochrones",
-        dst_trans=geo_info.trans,
-        dst_crs=geo_info.prj.crs,
-        thresholds=[0.9, 0.95]
-        
+        thresholds=[0.9, 0.95],
+        geo_info=geo_info,
+        dst_prj=dst_prj,
     )
 
     writer = OutputWriter(
