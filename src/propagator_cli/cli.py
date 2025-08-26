@@ -11,7 +11,7 @@ from propagator.propagator import Propagator
 from propagator_cli.console import info_msg, ok_msg, setup_console
 from propagator_io.configuration import PropagatorConfigurationLegacy
 from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
-from propagator_io.output import write_geotiff_output, write_json_metadata
+from propagator_io.writer import GeoTiffWriter, MetadataJSONWriter
 
 
 # --- CLI configuration -------------------------------------------------------
@@ -111,6 +111,18 @@ def main():
     veg = loader.get_veg()
     geo_info = loader.get_geo_info()
 
+    geotiff_writer = GeoTiffWriter(
+        output_folder=cfg.output,
+        prefix="fire_probability",
+        dst_trans=geo_info.trans,
+        dst_crs=geo_info.prj.crs
+    )
+
+    metadata_writer = MetadataJSONWriter(
+        output_folder=cfg.output,
+        prefix="fire_probability"
+    )
+
     args = dict()
     if cfg.p_time_fn is not None:
         args.update(dict(p_time_fn=cfg.p_time_fn))
@@ -146,19 +158,14 @@ def main():
         if simulator.time % cfg.time_resolution == 0:
             output = simulator.get_output()
             # Save the output to the specified folder
-            write_geotiff_output(
+            geotiff_writer.write_raster(
                 output.fire_probability,
-                geo_info.trans,
-                geo_info.prj.crs,
-                cli.output,
-                prefix="fire_probability",
                 c_time=simulator.time,
+                ref_date=ref_date
             )
 
-            write_json_metadata(
+            metadata_writer.write_metadata(
                 output.stats,
-                cli.output,
-                prefix="metadata",
                 c_time=simulator.time,
                 ref_date=ref_date
             )

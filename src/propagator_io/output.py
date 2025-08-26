@@ -23,17 +23,6 @@ def write_geotiff_output(
     write_geotiff(tiff_file, values, dst_trans, dst_crs, values.dtype)
 
 
-def write_json_metadata(
-        stats: PropagatorStats, 
-        output_folder: Path,
-        prefix: str,
-        c_time: int,
-        ref_date: datetime
-    ) -> None:
-    json_file = output_folder / f"{prefix}_{c_time}.json"
-    with open(json_file, "w") as fp:
-        data = stats.to_dict(c_time, ref_date)
-        json.dump(data, fp)
 
 
 

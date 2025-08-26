@@ -347,28 +347,6 @@ def reproject(
     return dst, dst_trans
 
 
-def write_geotiff(
-    filename: str|Path,
-    values: npt.NDArray[np.floating] | npt.NDArray[np.integer],
-    dst_trans,
-    dst_crs,
-    dtype: npt.DTypeLike = np.uint8,
-) -> None:
-    """Write a single-band GeoTIFF with provided transform and CRS."""
-    with rio.Env():
-        with rio.open(
-            filename,
-            "w",
-            driver="GTiff",
-            width=values.shape[1],
-            height=values.shape[0],
-            count=1,
-            dtype=dtype,
-            nodata=0,
-            transform=dst_trans,
-            crs=dst_crs,
-        ) as f:
-            f.write(values.astype(dtype), indexes=1)
 
 
 def smooth_linestring(linestring, smooth_sigma):
