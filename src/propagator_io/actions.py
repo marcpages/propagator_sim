@@ -57,9 +57,9 @@ class Action(BaseModel):
             fill=0,
             default_value=1,
             all_touched=True,
-            dtype="bool"
+            dtype="uint8"
         )
-        return m
+        return m.astype(bool)
 
     def rasterize_action(
         self,

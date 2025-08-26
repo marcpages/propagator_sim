@@ -10,7 +10,10 @@ from propagator_io.geometry import (
     rasterize_geometries
 )
 
-from propagator_io.actions import Action, parse_actions
+from propagator_io.actions import (
+    Action, parse_actions,
+    NO_FUEL_ACTION, NO_MOIST_ACTION
+)
 
 # ---- project utils ----------------------------------------------------------
 from propagator.utils import normalize
@@ -95,11 +98,13 @@ class TimedInput(BaseModel):
             self,
             geo_info: GeographicInfo
     ) -> BoundaryConditions:
+        # rasterize weather conditions > so far given as scalars
         w_speed_arr = np.ones(geo_info.shape) * self.w_speed
         w_dir_arr = np.ones(geo_info.shape) * self.w_dir
         moisture_arr = np.ones(geo_info.shape) * self.moisture
-
         ignition_mask = None
+        additional_moisture = None
+        vegetation_changes = None
 
         if self.ignitions is not None:
             ignition_mask = rasterize_geometries(
@@ -110,11 +115,31 @@ class TimedInput(BaseModel):
                 merge_alg="replace"
             )
 
-        # convert info in PropagatorBoundaryConditions
+        if self.actions is not None:
+            additional_moisture = np.full(geo_info.shape,
+                                          fill_value=NO_MOIST_ACTION,
+                                          dtype=float)
+            vegetation_changes = np.full(geo_info.shape,
+                                         fill_value=NO_FUEL_ACTION,
+                                         dtype=float)
+            for action in self.actions:
+                moist_action, fuel_action = action.rasterize_action(
+                    geo_info,
+                    non_vegetated=0.0  # hardcoded for now
+                )
+                # accumulate actions
+                additional_moisture += moist_action
+                # substitute fuel actions (last one wins)
+                np.putmask(vegetation_changes, fuel_action != NO_FUEL_ACTION,
+                           fuel_action)
+
+        # convert info in Propagator BoundaryConditions
         return BoundaryConditions(
             time=self.time,
             wind_speed=w_speed_arr,
             wind_dir=w_dir_arr,
             moisture=moisture_arr,
-            ignition_mask=ignition_mask
+            ignition_mask=ignition_mask,
+            additional_moisture=additional_moisture,
+            vegetation_changes=vegetation_changes
         )
