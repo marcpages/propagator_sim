@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Type, cast, List, Tuple, Literal
+from typing import Any, Iterable, Type, cast, List, Literal, Optional
 import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel, Field, field_validator
@@ -22,8 +22,7 @@ class ActionType(str, Enum):
 
 
 # constants
-NO_MOIST_ACTION = 0.0  # because it is added
-NO_FUEL_ACTION = 0.0  # considered as no-fuel-info
+# NOTE: fixed moisture values in [0, 1]
 WATERLINE_ACTION_MOIST_VALUE = 0.27
 CANADAIR_MOIST_VALUE = 0.25
 CANADAIR_BUFFER_MOIST_VALUE = 0.22
@@ -52,6 +51,7 @@ class Action(BaseModel):
         return geoms
 
     def _mask(self, geo_info: GeographicInfo) -> np.ndarray:
+        """Boolean mask of the action geometries."""
         m = rasterize_geometries(
             geometries=self.geometries,
             geo_info=geo_info,
@@ -62,10 +62,15 @@ class Action(BaseModel):
         )
         return m.astype(bool)
 
-    def rasterize_action(
-        self, geo_info: GeographicInfo, **kwargs: Any
-    ) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
-        raise NotImplementedError()
+    def rasterize_action_moisture(
+        self, geo_info: GeographicInfo
+    ) -> Optional[npt.NDArray[np.floating]]:
+        return None
+
+    def rasterize_action_fuel(
+        self, geo_info: GeographicInfo, fuel: int
+    ) -> Optional[npt.NDArray[np.floating]]:
+        return None
 
 
 # ---------- Concrete actions ----------
@@ -80,18 +85,14 @@ class WaterlineAction(Action):
     def allowed_kinds(cls) -> set[GeometryKind]:
         return {GeometryKind.LINE}
 
-    def rasterize_action(
-        self, geo_info: GeographicInfo, **kwargs: Any
-    ) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
+    def rasterize_action_moisture(
+        self, geo_info: GeographicInfo
+    ) -> Optional[npt.NDArray[np.floating]]:
         mask_action = self._mask(geo_info)
-        # moisture action
         mask_buffer = ndimage.binary_dilation(mask_action)
         moisture_action = np.where(
-            mask_buffer, WATERLINE_ACTION_MOIST_VALUE, NO_MOIST_ACTION
-        )
-        # fuel action > nothing for waterline actions
-        fuel_action = np.full(geo_info.shape, NO_FUEL_ACTION, dtype=float)
-        return moisture_action, fuel_action
+            mask_buffer, WATERLINE_ACTION_MOIST_VALUE, np.nan)
+        return moisture_action
 
 
 class CanadairAction(Action):
@@ -103,19 +104,16 @@ class CanadairAction(Action):
     def allowed_kinds(cls) -> set[GeometryKind]:
         return {GeometryKind.LINE}
 
-    def rasterize_action(
-        self, geo_info: GeographicInfo, **kwargs: Any
-    ) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
+    def rasterize_action_moisture(
+        self, geo_info: GeographicInfo
+    ) -> npt.NDArray[np.floating]:
         mask_action = self._mask(geo_info)
-        # moisture action
         mask_buffer = ndimage.binary_dilation(mask_action)
         moisture_action = np.where(
-            mask_buffer, CANADAIR_BUFFER_MOIST_VALUE, NO_MOIST_ACTION
-        )
-        moisture_action = np.where(mask_action, CANADAIR_MOIST_VALUE, moisture_action)
-        # fuel action > nothing for waterline actions
-        fuel_action = np.full(geo_info.shape, NO_FUEL_ACTION, dtype=float)
-        return moisture_action, fuel_action
+            mask_buffer, CANADAIR_BUFFER_MOIST_VALUE, np.nan)
+        moisture_action = np.where(mask_action, CANADAIR_MOIST_VALUE,
+                                   moisture_action)
+        return moisture_action
 
 
 class HelicopterAction(Action):
@@ -128,10 +126,9 @@ class HelicopterAction(Action):
         return {GeometryKind.LINE}
 
     def rasterize_action(
-        self, geo_info: GeographicInfo, **kwargs: Any
-    ) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
+        self, geo_info: GeographicInfo
+    ) -> npt.NDArray[np.floating]:
         mask_action = self._mask(geo_info)
-        #  moisture effect
         # create "jittered" seed points near the line pixels
         iy, ix = np.nonzero(mask_action)
         seed_mask = np.zeros(geo_info.shape, dtype=bool)
@@ -144,12 +141,9 @@ class HelicopterAction(Action):
         buffer_mask = ndimage.binary_dilation(seed_mask)
         # create moisture action
         moisture_action = np.where(
-            buffer_mask, HELICOPTER_BUFFER_MOIST_VALUE, NO_MOIST_ACTION
-        )
+            buffer_mask, HELICOPTER_BUFFER_MOIST_VALUE, np.nan)
         moisture_action[seed_mask] = HELICOPTER_MOIST_VALUE
-        # fuel effect
-        fuel_action = np.full(geo_info.shape, NO_FUEL_ACTION, dtype=float)
-        return moisture_action, fuel_action
+        return moisture_action
 
 
 class HeavyAction(Action):
@@ -161,20 +155,13 @@ class HeavyAction(Action):
     def allowed_kinds(cls) -> set[GeometryKind]:
         return {GeometryKind.LINE}
 
-    def rasterize_action(
-        self, geo_info: GeographicInfo, **kwargs: Any
-    ) -> Tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
-        non_vegetated = kwargs.get("non_vegetated", None)
-        if non_vegetated is None:
-            raise ValueError("HeavyAction requires 'non_vegetated' value")
-        non_vegetated = float(non_vegetated)
+    def rasterize_action_fuel(
+        self, geo_info: GeographicInfo, fuel: int
+    ) -> npt.NDArray[np.floating]:
         mask_action = self._mask(geo_info)
-        # moisture action > nothing for heavy actions
-        moisture_action = np.full(geo_info.shape, NO_MOIST_ACTION, dtype=float)
-        # fuel action
         mask_buffer = ndimage.binary_dilation(mask_action)
-        fuel_action = np.where(mask_buffer, non_vegetated, NO_FUEL_ACTION)
-        return moisture_action, fuel_action
+        fuel_action = np.where(mask_buffer, fuel, np.nan)
+        return fuel_action
 
 
 # ---------- parsing for boundary conditions definition ----------
@@ -195,7 +182,8 @@ def get_action_registry() -> dict[ActionType, Type[Action]]:
     reg: dict[ActionType, Type[Action]] = {}
     for sub in _iter_subclasses(Action):
         # Be defensive: model_fields may not exist on unrelated classes
-        fields: dict[str, Any] = cast(dict[str, Any], getattr(sub, "model_fields", {}))
+        fields: dict[str, Any] = cast(dict[str, Any],
+                                      getattr(sub, "model_fields", {}))
         info = fields.get("action_type")
         default = getattr(info, "default", None)
         if isinstance(default, ActionType):
@@ -244,7 +232,8 @@ def parse_actions(
             # unknown/unregistered action -> ignore
             continue
         allowed = {k.value for k in cls.allowed_kinds()}
-        geoms = GeometryParser.parse_geometry_list(raw, allowed=allowed, epsg=epsg)
+        geoms = GeometryParser.parse_geometry_list(raw,
+                                                   allowed=allowed, epsg=epsg)
         if geoms:
             acc[atype].extend(geoms)
             consumed.add(key)

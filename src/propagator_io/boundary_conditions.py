@@ -3,15 +3,16 @@ from __future__ import annotations
 from typing import List, Optional
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
+from pydantic import (
+    BaseModel, ConfigDict, Field, field_validator, model_validator
+)
 from propagator.propagator import (
     BoundaryConditions,
 )
 
 # ---- project utils ----------------------------------------------------------
 from propagator.utils import normalize
-from propagator_io.actions import NO_FUEL_ACTION, NO_MOIST_ACTION, Action, parse_actions
+from propagator_io.actions import Action, parse_actions
 from propagator_io.geo import GeographicInfo
 from propagator_io.geometry import (
     DEFAULT_EPSG_GEOMETRY,
@@ -96,7 +97,11 @@ class TimedInput(BaseModel):
                 data.pop(k, None)
         return data
 
-    def get_boundary_conditions(self, geo_info: GeographicInfo) -> BoundaryConditions:
+    def get_boundary_conditions(
+        self,
+        geo_info: GeographicInfo,
+        non_vegetated: int = 0,
+    ) -> BoundaryConditions:
         # rasterize weather conditions > so far given as scalars
         w_speed_arr = np.ones(geo_info.shape) * self.w_speed
         w_dir_arr = np.ones(geo_info.shape) * self.w_dir
@@ -115,23 +120,37 @@ class TimedInput(BaseModel):
             )
 
         if self.actions is not None:
-            additional_moisture = np.full(
-                geo_info.shape, fill_value=NO_MOIST_ACTION, dtype=float
-            )
-            vegetation_changes = np.full(
-                geo_info.shape, fill_value=NO_FUEL_ACTION, dtype=float
-            )
             for action in self.actions:
-                moist_action, fuel_action = action.rasterize_action(
-                    geo_info,
-                    non_vegetated=0.0,  # hardcoded for now
-                )
-                # accumulate actions
-                additional_moisture += moist_action
-                # substitute fuel actions (last one wins)
-                np.putmask(
-                    vegetation_changes, fuel_action != NO_FUEL_ACTION, fuel_action
-                )
+                # moisture actions
+                moist_action = action.rasterize_action_moisture(geo_info)
+                if moist_action is not None:
+                    if additional_moisture is None:
+                        additional_moisture = np.zeros(geo_info.shape)
+                    # in case of multiple actions, take the one
+                    # that have maximum effect e.g. max moisture
+                    moisture_arr_tmp = moisture_arr + additional_moisture
+                    moist_action = np.where(
+                        np.isnan(moist_action),
+                        0.0,
+                        moist_action,
+                    )
+                    moist_final = np.maximum(
+                        moisture_arr_tmp,
+                        moist_action,
+                    )
+                    additional_moisture = moist_final - moisture_arr
+                # fuel actions
+                fuel_action = action.rasterize_action_fuel(
+                    geo_info, non_vegetated)
+                if fuel_action is not None:
+                    if vegetation_changes is None:
+                        vegetation_changes = np.zeros(geo_info.shape,
+                                                      dtype=int)
+                    vegetation_changes = np.where(
+                        np.isnan(fuel_action),
+                        vegetation_changes,
+                        fuel_action,
+                    )
 
         # convert info in Propagator BoundaryConditions
         return BoundaryConditions(
