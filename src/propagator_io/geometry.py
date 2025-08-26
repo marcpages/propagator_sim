@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional, Union, Any, Sequence
+from typing import List, Optional, Union, Sequence
 import re
 import math
 from enum import Enum
@@ -185,12 +185,10 @@ class GeometryParser:
 
     @staticmethod
     def parse_geometry_list(
-        v: Any,
+        v: list,
         allowed: set[str],
         epsg: int
-    ) -> Optional[List[Geometry]]:
-        if v is None:
-            return None
+    ) -> List[Geometry]:
         if not isinstance(v, list):
             raise ValueError("expected a list")
         out: List[Geometry] = []

@@ -5,10 +5,12 @@ from pydantic import (BaseModel, ConfigDict, Field,
                       field_validator, model_validator)
 
 from propagator_io.geometry import (
-    GeometryParser, Geometry, GeoLine,
+    GeometryParser, Geometry,
     DEFAULT_EPSG_GEOMETRY,
     rasterize_geometries
 )
+
+from propagator_io.actions import Action, parse_actions
 
 # ---- project utils ----------------------------------------------------------
 from propagator.utils import normalize
@@ -37,11 +39,7 @@ class TimedInput(BaseModel):
     moisture: float = Field(0.0, ge=0.0, le=100.0,
                             description="fuel moisture in percent (0-100)")
 
-    # Per-step actions (LINE-only)
-    waterline_action: Optional[List[GeoLine]] = None
-    canadair: Optional[List[GeoLine]] = None
-    helicopter: Optional[List[GeoLine]] = None
-    heavy_action: Optional[List[GeoLine]] = None
+    actions: Optional[list[Action]] = None
 
     # Optional per-step ignitions (POINT/LINE/POLYGON)
     ignitions: Optional[List[Geometry]] = None
@@ -72,24 +70,25 @@ class TimedInput(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _parse_geometry_fields(cls, data: dict, info):
+    def _lift_legacy_actions(cls, data: dict, info):
         if not isinstance(data, dict):
             return data
         epsg = (info.context or {}).get("epsg", DEFAULT_EPSG_GEOMETRY)
-        # field -> allowed kinds
-        spec = {
-            "ignitions": {"point", "line", "polygon"},
-            "waterline_action": {"line"},
-            "canadair": {"line"},
-            "helicopter": {"line"},
-            "heavy_action": {"line"},
-        }
-        for key, allowed in spec.items():
-            val = data.get(key)
-            if isinstance(val, list) and (not val or isinstance(val[0], str)):
-                data[key] = GeometryParser.parse_geometry_list(
-                    val, allowed=allowed, epsg=epsg
+        #  legacy ignitions parsing
+        if "ignitions" in data:
+            v = data["ignitions"]
+            if isinstance(v, list) and (not v or isinstance(v[0], str)):
+                data["ignitions"] = GeometryParser.parse_geometry_list(
+                    v, allowed={"point", "line", "polygon"}, epsg=epsg
                 )
+        # let actions.py parse and normalize legacy fields
+        new_actions, consumed = parse_actions(data, epsg=epsg)
+        if len(new_actions) != 0:
+            # append to any already-provided "actions"
+            data["actions"] = list(data.get("actions", [])) + new_actions
+            # remove consumed legacy keys so they don't error as "extra"
+            for k in consumed:
+                data.pop(k, None)
         return data
 
     def get_boundary_conditions(
@@ -111,7 +110,6 @@ class TimedInput(BaseModel):
                 merge_alg="replace"
             )
 
-
         # convert info in PropagatorBoundaryConditions
         return BoundaryConditions(
             time=self.time,
@@ -120,7 +118,3 @@ class TimedInput(BaseModel):
             moisture=moisture_arr,
             ignition_mask=ignition_mask
         )
-
-
-
-
