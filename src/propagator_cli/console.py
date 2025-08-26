@@ -7,8 +7,10 @@ from typing import Optional
 
 from rich.console import Console
 from rich.text import Text
+
 # from rich.table import Table
 from rich.panel import Panel
+
 # from rich import box
 from rich.traceback import install as rich_traceback_install
 
@@ -109,8 +111,7 @@ def warn_msg(message: str) -> None:
 
 
 def error_msg(message: str) -> None:
-    get_console().print(Panel.fit(Text(message, style="bold red"),
-                                  border_style="red"))
+    get_console().print(Panel.fit(Text(message, style="bold red"), border_style="red"))
 
 
 # def print_config_summary(cfg) -> None:

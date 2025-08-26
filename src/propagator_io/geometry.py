@@ -26,9 +26,10 @@ class GeometryKind(str, Enum):
 
 class GeometryBase(BaseModel):
     """Common fields/behavior for all geometries."""
+
     model_config = ConfigDict(
         extra="forbid",
-        arbitrary_types_allowed=True,   # <-- allow np.ndarray, CRS
+        arbitrary_types_allowed=True,  # <-- allow np.ndarray, CRS
     )
 
     kind: GeometryKind
@@ -83,8 +84,7 @@ class GeometryBase(BaseModel):
             if self.crs != dst_crs:
                 xs, ys = self._reproject_x_y(dst_crs)
         # convert to pure Python lists of [x, y]
-        coords = [[float(x), float(y)]
-                  for x, y in zip(xs.tolist(), ys.tolist())]
+        coords = [[float(x), float(y)] for x, y in zip(xs.tolist(), ys.tolist())]
         if self.kind == GeometryKind.POINT:
             # GeoJSON point: [x, y]
             return {"type": "Point", "coordinates": coords[0]}
@@ -121,8 +121,10 @@ class GeoPolygon(GeometryBase):
     def _check_poly(cls, data):
         if len(data["xs"]) < 4:  # because the polygon must be closed
             raise ValueError("Polygon must have at least 4 points")
-        if not (math.isclose(data["xs"][0], data["xs"][-1]) and
-                math.isclose(data["ys"][0], data["ys"][-1])):
+        if not (
+            math.isclose(data["xs"][0], data["xs"][-1])
+            and math.isclose(data["ys"][0], data["ys"][-1])
+        ):
             raise ValueError("Polygon must be closed")
         return data
 
@@ -168,13 +170,13 @@ class GeometryParser:
         m_series = _SERIES_RE.match(s)
         if m_series:
             kind = m_series.group("kind").upper()
-            ys_arr = np.asarray(_split_floats(m_series.group("ys")),
-                                dtype=float)
-            xs_arr = np.asarray(_split_floats(m_series.group("xs")),
-                                dtype=float)
+            ys_arr = np.asarray(_split_floats(m_series.group("ys")), dtype=float)
+            xs_arr = np.asarray(_split_floats(m_series.group("xs")), dtype=float)
             if ys_arr.size != xs_arr.size:
-                raise ValueError(f"{kind}: y/x counts differ \
-                    ({ys_arr.size} vs {xs_arr.size})")
+                raise ValueError(
+                    f"{kind}: y/x counts differ \
+                    ({ys_arr.size} vs {xs_arr.size})"
+                )
             if kind == "LINE":
                 return GeoLine(ys=ys_arr, xs=xs_arr, crs=crs)
             elif kind == "POLYGON":
@@ -210,6 +212,7 @@ class GeometryParser:
 
 # --- rasterization ---
 
+
 def rasterize_geometries(
     geometries: Sequence[Geometry],
     geo_info: GeographicInfo,
@@ -218,7 +221,7 @@ def rasterize_geometries(
     values: Optional[Sequence[Union[int, float]]] = None,
     all_touched: bool = True,
     dtype: str = "uint8",
-    merge_alg: str = "replace",   # "replace" | "add"
+    merge_alg: str = "replace",  # "replace" | "add"
 ) -> np.ndarray:
     """
     Rasterize a sequence of Geometry objects into a numpy array.

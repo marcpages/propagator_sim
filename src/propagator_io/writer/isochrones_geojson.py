@@ -1,20 +1,25 @@
-import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
 import fiona
 import geopandas as gpd
 import numpy as np
+import numpy.typing as npt
+import pandas as pd
+from pyproj import CRS
 from rasterio.features import shapes
+from rasterio.transform import Affine
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.morphology import binary_dilation, binary_erosion
 from scipy.signal.signaltools import medfilt2d
 from shapely.geometry import LineString, MultiLineString, mapping, shape
 
+from propagator.models import PropagatorOutput
 from propagator_io.writer.protocol import IsochronesWriterProtocol
 
-TIME_TAG = 'time'
+TIME_TAG = "time"
+
 
 def smooth_linestring(linestring, smooth_sigma):
     """
@@ -36,14 +41,14 @@ def smooth_linestring(linestring, smooth_sigma):
 
 
 def extract_isochrone(
-    values,
-    transf,
+    values: npt.NDArray[np.floating],
+    transf: Affine,
     thresholds=[0.5, 0.75, 0.9],
     med_filt_val=9,
     min_length=0.0001,
     smooth_sigma=0.8,
     simp_fact=0.00001,
-):
+) -> dict[float, MultiLineString]:
     """
     extract isochrone from the propagation probability map values at the probanilities thresholds,
      applying filtering to smooth out the result
@@ -66,7 +71,7 @@ def extract_isochrone(
 
     for t in thresholds:
         over_t_ = (filt_values >= t).astype("uint8")
-        over_t = binary_dilation(binary_erosion(over_t_).astype("uint8")).astype(       # type: ignore #binary_erosion has None typing in library
+        over_t = binary_dilation(binary_erosion(over_t_).astype("uint8")).astype(  # type: ignore #binary_erosion has None typing in library
             "uint8"
         )
         if np.any(over_t):
@@ -74,8 +79,10 @@ def extract_isochrone(
                 sh = shape(s)
 
                 ml = [
-                    smooth_linestring(interior_line, smooth_sigma)  # .simplify(simp_fact)
-                    for interior_line in sh.interiors                   # type: ignore # sh.interiors is missing in typing
+                    smooth_linestring(
+                        interior_line, smooth_sigma
+                    )  # .simplify(simp_fact)
+                    for interior_line in sh.interiors  # type: ignore # sh.interiors is missing in typing
                     if interior_line.length > min_length
                 ]
 
@@ -122,18 +129,53 @@ def save_isochrones(results, filename: str, format: str = "geojson") -> None:
             f.write(json.dumps(geojson_obj))
 
 
-
 @dataclass
 class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
+    start_date: datetime
     output_folder: Path
     prefix: str
+    dst_trans: Affine
+    dst_crs: CRS
 
-    def write_isochrones(
-        self,
-        isochrones: gpd.GeoDataFrame,
-        c_time: int,
-        ref_date: datetime
-    ) -> None:
-        json_file = self.output_folder / f"{self.prefix}_{c_time}.json"
-        with open(json_file, "w") as fp:
-            json.dump(isochrones, fp)
+    thresholds = ([0.5, 0.75, 0.9],)
+    med_filt_val = (9,)
+    min_length = (0.0001,)
+    smooth_sigma = (0.8,)
+    simp_fact = (0.00001,)
+
+    _isochrones: gpd.GeoDataFrame = field(init=False)
+
+    def __post_init__(self):
+        self._isochrones = gpd.GeoDataFrame(
+            crs=self.dst_crs.to_epsg(),
+            columns=["geometry", "date"],
+            geometry="geometry",
+            index=pd.MultiIndex.from_arrays([[], []], names=["threshold", "time"])
+        )
+
+    def write_isochrones(self, output: PropagatorOutput) -> None:
+        json_file = self.output_folder / f"{self.prefix}_{output.time}.json"
+        ref_date = self.ref_date(output)
+        isochrones_geoms = extract_isochrone(output.fire_probability, self.dst_trans)
+
+        # iterate over threshold/geometry and add it to the _isochrones
+        for threshold, geom in isochrones_geoms.items():
+            self._isochrones = gpd.GeoDataFrame(
+                pd.concat(
+                    [
+                        self._isochrones,
+                        pd.DataFrame(
+                            {
+                                "geometry": geom,
+                                "date": ref_date.isoformat(),
+                            },
+                            index=pd.MultiIndex.from_tuples(
+                                [(threshold, output.time)], names=["threshold", "time"]
+                            ),
+                        ),
+                    ]
+                ),
+                geometry="geometry",
+            )
+
+        self._isochrones.to_file(json_file, driver="GeoJSON")

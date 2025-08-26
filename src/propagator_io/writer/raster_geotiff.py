@@ -1,7 +1,7 @@
-
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 import numpy.typing as npt
@@ -11,8 +11,7 @@ from rasterio import enums, transform, warp
 from rasterio.transform import Affine
 
 from .protocol import RasterWriterProtocol
-
-
+from propagator.models import PropagatorOutput
 
 
 def reproject(
@@ -88,8 +87,9 @@ def trim_values(
     trim_trans = transform.from_bounds(west, south, east, north, cols, rows)
     return trim_values, trim_trans
 
+
 def write_geotiff(
-    filename: str|Path,
+    filename: str | Path,
     values: npt.NDArray[np.floating] | npt.NDArray[np.integer],
     dst_trans,
     dst_crs,
@@ -114,19 +114,20 @@ def write_geotiff(
 
 @dataclass
 class GeoTiffWriter(RasterWriterProtocol):
+    start_date: datetime
     dst_trans: Affine
     dst_crs: CRS
     output_folder: Path
-    prefix: str
-    
-    def write_raster(
-        self, 
-        values: npt.NDArray[np.floating] | npt.NDArray[np.integer],
-        c_time: int,
-        ref_date: datetime,
-    ) -> None:
+    raster_variables_mapping: dict[
+        str,
+        Callable[
+            [PropagatorOutput], npt.NDArray[np.floating] | npt.NDArray[np.integer]
+        ],
+    ]
 
-
-        tiff_file = self.output_folder / f"{self.prefix}_{c_time}.tiff"
-        # now it returns the RoS in m/h
-        write_geotiff(tiff_file, values, self.dst_trans, self.dst_crs, values.dtype)
+    def write_rasters(self, output: PropagatorOutput) -> None:
+        for key, fun in self.raster_variables_mapping.items():
+            values = fun(output)
+            tiff_file = self.output_folder / f"{key}_{output.time}.tiff"
+            # now it returns the RoS in m/h
+            write_geotiff(tiff_file, values, self.dst_trans, self.dst_crs, values.dtype)

@@ -37,8 +37,9 @@ from propagator.constants import (
 from propagator.models import PMoistFn, PTimeFn
 from propagator.utils import normalize
 
-type ROS_model_literal = Literal['default', 'wang', 'rothermel']
-type Moisture_model_literal = Literal['default', 'new_formulation', 'rothermel']
+type ROS_model_literal = Literal["default", "wang", "rothermel"]
+type Moisture_model_literal = Literal["default", "new_formulation", "rothermel"]
+
 
 def load_parameters(
     probability_file: str | None = None,
@@ -67,11 +68,11 @@ def get_p_time_fn(ros_model_code: ROS_model_literal) -> PTimeFn:
     angle_to, dist, moist, w_dir, w_speed) -> (time, ros)`.
     """
     match ros_model_code:
-        case 'default':
+        case "default":
             return p_time_standard
-        case 'wang':
+        case "wang":
             return p_time_wang
-        case 'rothermel':
+        case "rothermel":
             return p_time_rothermel
 
     raise ValueError(f"Unknown ros_model_code: {ros_model_code!r}")
@@ -80,11 +81,11 @@ def get_p_time_fn(ros_model_code: ROS_model_literal) -> PTimeFn:
 def get_p_moist_fn(moist_model_code: Moisture_model_literal) -> PMoistFn:
     """Select a moisture probability correction by code."""
     match moist_model_code:
-        case 'default':
+        case "default":
             return moist_proba_correction_1
-        case 'new_formulation':
+        case "new_formulation":
             return moist_proba_correction_1
-        case 'rothermel':
+        case "rothermel":
             return moist_proba_correction_2
 
     raise ValueError(f"Unknown moist_model_code: {moist_model_code!r}")

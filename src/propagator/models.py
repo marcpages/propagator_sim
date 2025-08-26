@@ -55,17 +55,17 @@ class BoundaryConditions:
     vegetation_changes: Optional[npt.NDArray[np.floating]] = None
 
 
-
 @dataclass(frozen=True)
 class PropagatorStats:
     """Summary statistics for the current simulation state."""
+
     n_active: int
     area_mean: float
     area_50: float
     area_75: float
     area_90: float
 
-    def to_dict(self, c_time: int, ref_date: datetime) -> dict[str, float|int|str]:
+    def to_dict(self, c_time: int, ref_date: datetime) -> dict[str, float | int | str]:
         return dict(
             c_time=c_time,
             ref_date=ref_date.isoformat(),
@@ -76,6 +76,7 @@ class PropagatorStats:
             area_90=self.area_90,
         )
 
+
 @dataclass(frozen=True)
 class PropagatorOutput:
     """Snapshot of simulation outputs at a given time step."""
@@ -85,11 +86,8 @@ class PropagatorOutput:
     ros_mean: npt.NDArray[np.floating]
     ros_max: npt.NDArray[np.floating]
     fireline_int_mean: npt.NDArray[np.floating]
-    fireline_int_max: npt.NDArray[np.floating]  
+    fireline_int_max: npt.NDArray[np.floating]
     stats: PropagatorStats
-
-
-
 
 
 class PTimeFn(Protocol):

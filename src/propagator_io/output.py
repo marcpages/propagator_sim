@@ -23,9 +23,6 @@ def write_geotiff_output(
     write_geotiff(tiff_file, values, dst_trans, dst_crs, values.dtype)
 
 
-
-
-
 # def __update_isochrones(self, isochrones, values, dst_trans):
 #     isochrones[self.c_time] = extract_isochrone(
 #         values,

@@ -3,6 +3,7 @@
 Stores future updates grouped by simulation time and exposes utilities to push
 events, pop the earliest batch, and inspect active realizations.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -14,6 +15,7 @@ import numpy.typing as npt
 from propagator.models import BoundaryConditions, CoordsArray, Ignitions
 
 PopResult = Tuple[int, "SchedulerEvent"]
+
 
 def _validate_coords(coords: npt.ArrayLike) -> CoordsArray:
     if not isinstance(coords, np.ndarray):
@@ -27,9 +29,10 @@ def _validate_coords(coords: npt.ArrayLike) -> CoordsArray:
 
 
 @dataclass
-class SchedulerEvent():
+class SchedulerEvent:
     """Represents a scheduled event in the simulation."""
-    coords:  List[CoordsArray] = field(default_factory=list)
+
+    coords: List[CoordsArray] = field(default_factory=list)
 
     # boundary_conditions
     moisture: Optional[npt.NDArray[np.floating]] = None
@@ -41,11 +44,13 @@ class SchedulerEvent():
     vegetation_changes: Optional[npt.NDArray[np.floating]] = None
 
 
-
 @dataclass(frozen=True)
 class SortedDict:
     """Represents a sorted dictionary for scheduling events."""
-    _data: Dict[int, SchedulerEvent] = field(default_factory=dict, init=False, repr=False)
+
+    _data: Dict[int, SchedulerEvent] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _order: List[int] = field(default_factory=list, init=False, repr=False)
 
     def __setitem__(self, key: int, value: SchedulerEvent) -> None:
@@ -65,8 +70,10 @@ class SortedDict:
 
     def __len__(self) -> int:
         return len(self._data)
-    
-    def get(self, key: int, default: Optional[SchedulerEvent] = None) -> Optional[SchedulerEvent]:
+
+    def get(
+        self, key: int, default: Optional[SchedulerEvent] = None
+    ) -> Optional[SchedulerEvent]:
         return self._data.get(key, default)
 
     def popitem(self, index: int) -> tuple[int, SchedulerEvent]:
@@ -92,7 +99,7 @@ class SortedDict:
 
 
 @dataclass
-class Scheduler():
+class Scheduler:
     """
     Lightweight event scheduler for propagation updates.
 
@@ -105,7 +112,7 @@ class Scheduler():
 
     # --- Basic queue ops -----------------------------------------------------
 
-    def push_ignitions(self, ignitions: Ignitions) -> None:        
+    def push_ignitions(self, ignitions: Ignitions) -> None:
         event: SchedulerEvent | None
         if ignitions.time in self._queue:
             event = self._queue.get(ignitions.time, None)
@@ -135,7 +142,7 @@ class Scheduler():
         entry = self._queue.get(boundary_conditions.time, None)
         if entry is None:
             entry = SchedulerEvent()
-            self._queue[boundary_conditions.time]  = entry
+            self._queue[boundary_conditions.time] = entry
         if boundary_conditions.moisture is not None:
             entry.moisture = boundary_conditions.moisture
         if boundary_conditions.wind_dir is not None:
@@ -153,15 +160,15 @@ class Scheduler():
             # Tile the replication values to align
             realizations_expanded = np.tile(realizations, len(points))[:, None]
             # Concatenate along last axis
-            coords = np.hstack([points_expanded, realizations_expanded])            
+            coords = np.hstack([points_expanded, realizations_expanded])
             ignitions = Ignitions(time=boundary_conditions.time, coords=coords)
             self.push_ignitions(ignitions)
-    
+
         if boundary_conditions.additional_moisture is not None:
             if entry.additional_moisture is None:
                 entry.additional_moisture = boundary_conditions.additional_moisture
             else:
-                entry.additional_moisture += boundary_conditions.additional_moisture                
+                entry.additional_moisture += boundary_conditions.additional_moisture
         if boundary_conditions.vegetation_changes is not None:
             if entry.vegetation_changes is None:
                 entry.vegetation_changes = boundary_conditions.vegetation_changes
@@ -170,9 +177,8 @@ class Scheduler():
                 entry.vegetation_changes = np.where(
                     boundary_conditions.vegetation_changes == 0,
                     entry.vegetation_changes,
-                    boundary_conditions.vegetation_changes
+                    boundary_conditions.vegetation_changes,
                 )
-
 
     def active(self) -> npt.NDArray[np.integer]:
         if not self:
@@ -203,4 +209,3 @@ class Scheduler():
     def iterate(self) -> Iterator[PopResult]:
         while self:
             yield self.pop()
-

@@ -10,12 +10,12 @@ import utm
 from propagator_io.geo import GeographicInfo
 from propagator_io.input import PropagatorDataLoaderException
 from propagator.propagator import PropagatorError
-#from propagator.constants import DEFAULT_TILES_TAG
+# from propagator.constants import DEFAULT_TILES_TAG
 
 from .protocol import PropagatorInputDataProtocol
 
 DATA_DIR = "./data/"
-DEFAULT_TILES_TAG = 'default'
+DEFAULT_TILES_TAG = "default"
 
 
 def load_tile(zone_number, var, tile_i, tile_j, tileset=DEFAULT_TILES_TAG):

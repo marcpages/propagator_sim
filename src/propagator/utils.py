@@ -1,6 +1,5 @@
 """Utility helpers for raster/vector IO and small geometry ops."""
 
-
 from typing import TypeVar, Union
 
 import numpy as np
@@ -11,9 +10,11 @@ from numpy import pi
 # Define a type variable that can be either a float or a numpy array of floats
 T = TypeVar("T", bound=Union[float, npt.NDArray[np.floating]])
 
+
 def normalize(angle_to_norm: T) -> T:
     """Normalize an angle to the interval [-pi, pi)."""
     return (angle_to_norm + pi) % (2 * pi) - pi  # type: ignore[return-value]
+
 
 def add_point(
     img: npt.NDArray[np.floating], c: int, r: int, val: float
@@ -76,7 +77,10 @@ def add_segment(
 
 
 def add_line(
-    img: npt.NDArray[np.floating], cs: npt.NDArray[np.integer], rs: npt.NDArray[np.integer], val: float
+    img: npt.NDArray[np.floating],
+    cs: npt.NDArray[np.integer],
+    rs: npt.NDArray[np.integer],
+    val: float,
 ) -> list[tuple[int, int]]:
     """Rasterize a polyline defined by sequences `cs` and `rs` into `img`.
 
@@ -99,7 +103,10 @@ def add_line(
 
 
 def add_poly(
-    img: npt.NDArray[np.floating], cs: npt.NDArray[np.integer], rs: npt.NDArray[np.integer], val: float
+    img: npt.NDArray[np.floating],
+    cs: npt.NDArray[np.integer],
+    rs: npt.NDArray[np.integer],
+    val: float,
 ) -> list[tuple[int, int]]:
     """Fill a polygon defined by `cs` and `rs` into `img` with `val`.
 
@@ -201,7 +208,7 @@ def read_actions(
         min_lat = min(min(lats), min_lat)
         max_lon = max(max(lons), max_lon)
         min_lon = min(min(lons), min_lon)
-  
+
     mid_lat = (max_lat + min_lat) / 2
     mid_lon = (max_lon + min_lon) / 2
 
@@ -261,7 +268,3 @@ def rasterize_actions(
         active_points.extend(active)
 
     return img, active_points
-
-
-
-

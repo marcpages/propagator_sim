@@ -14,6 +14,7 @@ try:
 except ModuleNotFoundError:
     # Allow running without installing by adding src to path
     import os, sys
+
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
     from propagator.functions import moist_proba_correction_1, p_time_wang  # type: ignore
     from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs  # type: ignore

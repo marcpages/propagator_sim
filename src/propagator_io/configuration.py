@@ -32,18 +32,16 @@ class PropagatorConfigurationLegacy(BaseModel):
     mode: Literal["tileset", "geotiff"] = Field(
         "tileset",
         description="Mode of static data load: 'tileset' for automatic, "
-                    "'geotiff' for giving DEM and FUEL in input."
-                    "[default: tileset]",
+        "'geotiff' for giving DEM and FUEL in input."
+        "[default: tileset]",
     )
     dem: Optional[Path] = Field(
         None,
-        description="Path to DEM file (GeoTIFF), "
-                    "required in 'geotiff' mode",
+        description="Path to DEM file (GeoTIFF), required in 'geotiff' mode",
     )
     fuel: Optional[Path] = Field(
         None,
-        description="Path to FUEL file (GeoTIFF), "
-                    "required in 'geotiff' mode",
+        description="Path to FUEL file (GeoTIFF), required in 'geotiff' mode",
     )
     output: Path = Field(
         ...,
@@ -53,54 +51,31 @@ class PropagatorConfigurationLegacy(BaseModel):
         False,
         description="Export run logs",
     )
-    realizations: int = Field(
-        1, ge=1,
-        description="Number of realizations"
-    )
+    realizations: int = Field(1, ge=1, description="Number of realizations")
     init_date: datetime = Field(
-        default_factory=datetime.now,
-        description="Datetime of the simulated event"
+        default_factory=datetime.now, description="Datetime of the simulated event"
     )
     time_resolution: int = Field(
-        60, gt=0,
-        description="Simulation resolution [minutes]"
+        60, gt=0, description="Simulation resolution [minutes]"
     )
-    time_limit: int = Field(
-        1440, gt=0,
-        description="Simulation limit [minutes]"
-    )
+    time_limit: int = Field(1440, gt=0, description="Simulation limit [minutes]")
     epsg: int = Field(
         DEFAULT_EPSG_GEOMETRY,  # default to WGS84
-        description="EPSG of geometries"
+        description="EPSG of geometries",
     )
     ignitions: Optional[List[Geometry]] = Field(
-        None,
-        description="List of ignitions at simulation start (time=0)."
+        None, description="List of ignitions at simulation start (time=0)."
     )
     boundary_conditions: List[TimedInput] = Field(
-        default_factory=list,
-        description="List of boundary conditions"
+        default_factory=list, description="List of boundary conditions"
     )
-    do_spotting: bool = Field(
-        False,
-        description="Spotting option"
-    )
-    ros_model: ROS_model_literal = Field(
-        "default",
-        description="ROS model name"
-    )
+    do_spotting: bool = Field(False, description="Spotting option")
+    ros_model: ROS_model_literal = Field("default", description="ROS model name")
     prob_moist_model: Moisture_model_literal = Field(
-        "default",
-        description="Moisture model name"
+        "default", description="Moisture model name"
     )
-    p_time_fn: Optional[object] = Field(
-        default=None,
-        exclude=True
-    )
-    p_moist_fn: Optional[object] = Field(
-        default=None,
-        exclude=True
-    )
+    p_time_fn: Optional[object] = Field(default=None, exclude=True)
+    p_moist_fn: Optional[object] = Field(default=None, exclude=True)
 
     # ---------- checks ----------
     @field_validator("dem", "fuel", mode="before")
@@ -136,11 +111,14 @@ class PropagatorConfigurationLegacy(BaseModel):
                 except ValueError:
                     continue
             # if no format matched, raise error
-            raise ValueError(f"init_date string not recognized: {v!r}. "
-                             f"Expected formats: {fmt_ok}")
+            raise ValueError(
+                f"init_date string not recognized: {v!r}. Expected formats: {fmt_ok}"
+            )
         # if v is neither str nor datetime, raise error
-        raise TypeError(f"init_date must be a datetime or string, \
-            got {type(v).__name__}")
+        raise TypeError(
+            f"init_date must be a datetime or string, \
+            got {type(v).__name__}"
+        )
 
     @model_validator(mode="before")
     @classmethod
@@ -153,9 +131,8 @@ class PropagatorConfigurationLegacy(BaseModel):
         # 2) top-level ignitions (strings -> Geometry w/ epsg)
         if "ignitions" in data:
             data["ignitions"] = GeometryParser.parse_geometry_list(
-                                    data["ignitions"],
-                                    allowed={"point", "line", "polygon"},
-                                    epsg=epsg)
+                data["ignitions"], allowed={"point", "line", "polygon"}, epsg=epsg
+            )
 
         # 3) nested ignitions inside boundary_conditions[*]
         bcs = data.get("boundary_conditions")
@@ -178,8 +155,10 @@ class PropagatorConfigurationLegacy(BaseModel):
             if not self.fuel:
                 raise ValueError("FUEL path must be set in 'geotiff' mode")
         elif self.mode == "tileset" and (self.dem or self.fuel):
-            warn("DEM and FUEL paths are ignored in 'tileset' mode. "
-                 "Please remove them from the configuration.")
+            warn(
+                "DEM and FUEL paths are ignored in 'tileset' mode. "
+                "Please remove them from the configuration."
+            )
 
         # set the functions
         self.p_time_fn = get_p_time_fn(self.ros_model)
@@ -187,19 +166,19 @@ class PropagatorConfigurationLegacy(BaseModel):
         if self.p_time_fn is None:
             raise ValueError(f"Unknown ROS model: {self.ros_model}")
         if self.p_moist_fn is None:
-            raise ValueError(f"Unknown moisture model: \
-                {self.prob_moist_model}")
+            raise ValueError(
+                f"Unknown moisture model: \
+                {self.prob_moist_model}"
+            )
 
         # check if boundary condition is empty
         if len(self.boundary_conditions) == 0:
             raise ValueError("boundary_conditions must not be empty.")
 
         # check if time == 0 is present
-        t0_bc = next((bc for bc in self.boundary_conditions if bc.time == 0),
-                     None)
+        t0_bc = next((bc for bc in self.boundary_conditions if bc.time == 0), None)
         if t0_bc is None:
-            raise ValueError(
-                "boundary_conditions must include an entry with time = 0.")
+            raise ValueError("boundary_conditions must include an entry with time = 0.")
 
         # add initial ignitions (if present) to the firt boundary condition
         if self.ignitions:
@@ -224,11 +203,8 @@ class PropagatorConfigurationLegacy(BaseModel):
         return self
 
     def get_boundary_conditions(
-        self,
-        geo_info: GeographicInfo
+        self, geo_info: GeographicInfo
     ) -> List[BoundaryConditions]:
         # NOTE: boundary conditions should be sorted by time already
-        return [
-            bc.get_boundary_conditions(geo_info)
-            for bc in self.boundary_conditions
-        ]
+
+        return [bc.get_boundary_conditions(geo_info) for bc in self.boundary_conditions]

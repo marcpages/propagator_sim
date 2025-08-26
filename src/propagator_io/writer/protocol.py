@@ -1,37 +1,48 @@
-from datetime import datetime
-from typing import Protocol
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Optional, Protocol
 
-import numpy as np
-import numpy.typing as npt
-import geopandas as gpd
-
-from propagator.models import PropagatorStats
+from propagator.models import PropagatorOutput
 
 
-class RasterWriterProtocol(Protocol):
-    def write_raster(
+class BaseWriterProtocol(Protocol):
+    start_date: datetime
+
+    def ref_date(self, output: PropagatorOutput) -> datetime:
+        ref_date = self.start_date + timedelta(minutes=output.time)
+        return ref_date
+
+
+class RasterWriterProtocol(BaseWriterProtocol):
+    def write_rasters(
         self,
-        variable: str,
-        values: npt.NDArray[np.floating] | npt.NDArray[np.integer],
-        c_time: int,
-        ref_date: datetime,
-    ) -> None:
-        ...
+        output: PropagatorOutput,
+    ) -> None: ...
 
-class MetadataWriterProtocol(Protocol):
-    def write_metadata(
-        self,
-        stats: PropagatorStats,
-        c_time: int,
-        ref_date: datetime,
-    ) -> None:
-        ...
 
-class IsochronesWriterProtocol(Protocol):
+class MetadataWriterProtocol(BaseWriterProtocol):
+    def write_metadata(self, output: PropagatorOutput) -> None: ...
+
+
+class IsochronesWriterProtocol(BaseWriterProtocol):
     def write_isochrones(
         self,
-        isochrones: gpd.GeoDataFrame,
-        c_time: int,
-        ref_date: datetime,
-    ) -> None:
-        ...
+        output: PropagatorOutput,
+    ) -> None: ...
+
+
+@dataclass
+class OutputWriter:
+    raster_writer: Optional[RasterWriterProtocol] = None
+    metadata_writer: Optional[MetadataWriterProtocol] = None
+    isochrones_writer: Optional[IsochronesWriterProtocol] = None
+
+    def write_output(self, output: PropagatorOutput) -> None:
+        if self.raster_writer:
+            self.raster_writer.write_rasters(output)
+
+        if self.metadata_writer:
+            self.metadata_writer.write_metadata(output)
+
+        if self.isochrones_writer:
+            self.isochrones_writer.write_isochrones(output)

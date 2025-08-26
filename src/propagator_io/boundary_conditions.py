@@ -1,26 +1,24 @@
 from __future__ import annotations
+
 from typing import List, Optional
+
 import numpy as np
-from pydantic import (BaseModel, ConfigDict, Field,
-                      field_validator, model_validator)
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from propagator_io.geometry import (
-    GeometryParser, Geometry,
-    DEFAULT_EPSG_GEOMETRY,
-    rasterize_geometries
-)
-
-from propagator_io.actions import (
-    Action, parse_actions,
-    NO_FUEL_ACTION, NO_MOIST_ACTION
+from propagator.propagator import (
+    BoundaryConditions,
 )
 
 # ---- project utils ----------------------------------------------------------
 from propagator.utils import normalize
-from propagator.propagator import (
-    BoundaryConditions,
-)
+from propagator_io.actions import NO_FUEL_ACTION, NO_MOIST_ACTION, Action, parse_actions
 from propagator_io.geo import GeographicInfo
+from propagator_io.geometry import (
+    DEFAULT_EPSG_GEOMETRY,
+    Geometry,
+    GeometryParser,
+    rasterize_geometries,
+)
 
 
 # ---- wind helpers -----------------------------------------------------------
@@ -31,16 +29,20 @@ def meteo_deg_to_model_rad(deg: float) -> float:
 # ---- simulation inputs ------------------------------------------------------
 class TimedInput(BaseModel):
     """Single time-step boundary conditions."""
+
     model_config = ConfigDict(extra="allow")
 
     time: int = Field(0, description="minutes from simulation start")
 
     # Weather conditions
-    w_dir: float = Field(default_factory=lambda: meteo_deg_to_model_rad(0.0),
-                         description="wind direction in radians")  # ????
+    w_dir: float = Field(
+        default_factory=lambda: meteo_deg_to_model_rad(0.0),
+        description="wind direction in radians",
+    )  # ????
     w_speed: float = Field(0.0, description="wind speed in km/h")
-    moisture: float = Field(0.0, ge=0.0, le=100.0,
-                            description="fuel moisture in percent (0-100)")
+    moisture: float = Field(
+        0.0, ge=0.0, le=100.0, description="fuel moisture in percent (0-100)"
+    )
 
     actions: Optional[list[Action]] = None
 
@@ -60,7 +62,7 @@ class TimedInput(BaseModel):
         if v is None:
             return meteo_deg_to_model_rad(0.0)
         x = float(v)
-        if x > 2*np.pi or x < -2*np.pi:
+        if x > 2 * np.pi or x < -2 * np.pi:
             return meteo_deg_to_model_rad(x)
         return normalize(x)
 
@@ -112,7 +114,7 @@ class TimedInput(BaseModel):
                 geo_info=geo_info,
                 default_value=1,  # set 1 for ignited pixels
                 dtype="uint8",
-                merge_alg="replace"
+                merge_alg="replace",
             )
 
         if self.actions is not None:

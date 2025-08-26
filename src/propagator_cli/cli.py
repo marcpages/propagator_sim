@@ -12,31 +12,31 @@ from propagator.propagator import Propagator
 from propagator_cli.console import info_msg, ok_msg, setup_console
 from propagator_io.configuration import PropagatorConfigurationLegacy
 from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
-from propagator_io.writer import GeoTiffWriter, MetadataJSONWriter
+from propagator_io.writer import (
+    GeoTiffWriter,
+    MetadataJSONWriter,
+    IsochronesGeoJSONWriter,
+)
+from propagator_io.writer.protocol import OutputWriter
 
 
 # --- CLI configuration -------------------------------------------------------
 class PropagatorCLILegacy(BaseSettings):
     model_config = SettingsConfigDict(cli_parse_args=True)
 
-    config: Path = Field(
-        ...,
-        description="Path to configuration file (JSON)"
-    )
+    config: Path = Field(..., description="Path to configuration file (JSON)")
     mode: Literal["tileset", "geotiff"] = Field(
         "tileset",
         description="Mode of static data load: 'tileset' for automatic, "
-                    "'geotiff' for giving DEM and FUEL in input."
+        "'geotiff' for giving DEM and FUEL in input.",
     )
     dem: Optional[Path] = Field(
         None,
-        description="Path to DEM file (GeoTIFF), "
-                    "required in 'geotiff' mode",
+        description="Path to DEM file (GeoTIFF), required in 'geotiff' mode",
     )
     fuel: Optional[Path] = Field(
         None,
-        description="Path to FUEL file (GeoTIFF), "
-                    "required in 'geotiff' mode",
+        description="Path to FUEL file (GeoTIFF), required in 'geotiff' mode",
     )
     output: Path = Field(
         ...,
@@ -76,9 +76,7 @@ class PropagatorCLILegacy(BaseSettings):
         with open(self.config) as f:
             json_cfg = json.load(f)
         # CLI values override JSON if both are provided
-        return PropagatorConfigurationLegacy(**json_cfg,
-                                             **self.model_dump())
-
+        return PropagatorConfigurationLegacy(**json_cfg, **self.model_dump())
 
 # --- main function -----------------------------------------------------------
 def main():
@@ -91,12 +89,8 @@ def main():
     print(cli.model_dump())
 
     if cli.record:
-        basename = f"propagator_run_{
-            simulation_time.strftime('%Y%m%d_%H%M%S')}"
-        setup_console(
-            record_path=cli.output,
-            basename=basename
-        )
+        basename = f"propagator_run_{simulation_time.strftime('%Y%m%d_%H%M%S')}"
+        setup_console(record_path=cli.output, basename=basename)
     else:
         setup_console()
     ok_msg("Console initialized")
@@ -124,15 +118,32 @@ def main():
     geo_info = loader.get_geo_info()
 
     raster_writer = GeoTiffWriter(
+        start_date=cfg.init_date,
+        raster_variables_mapping={
+            "fire_probability": lambda output: output.fire_probability,
+            # "fireline_intensity_mean": lambda output: output.fireline_int_mean,
+        },
         output_folder=cfg.output,
-        prefix="fire_probability",
         dst_trans=geo_info.trans,
-        dst_crs=geo_info.prj.crs
+        dst_crs=geo_info.prj.crs,
     )
 
     metadata_writer = MetadataJSONWriter(
+        start_date=cfg.init_date, output_folder=cfg.output, prefix="metadata"
+    )
+
+    isochrones_writer = IsochronesGeoJSONWriter(
+        start_date=cfg.init_date,
         output_folder=cfg.output,
-        prefix="fire_probability"
+        prefix="isochrones",
+        dst_trans=geo_info.trans,
+        dst_crs=geo_info.prj.crs,
+    )
+
+    writer = OutputWriter(
+        raster_writer=raster_writer,
+        metadata_writer=metadata_writer,
+        isochrones_writer=isochrones_writer,
     )
 
     args = dict()
@@ -149,7 +160,7 @@ def main():
         probability_table=prob_table,
         veg_parameters=p_veg,
         do_spotting=cfg.do_spotting,
-        **args
+        **args,
     )
 
     boundary_conditions_list = cfg.get_boundary_conditions(geo_info)
@@ -161,29 +172,19 @@ def main():
         if next_time is None:
             break
 
-
         simulator.step()
-        ref_date=cfg.init_date + timedelta(minutes=simulator.time)
+        ref_date = cfg.init_date + timedelta(minutes=simulator.time)
 
         info_msg(f"Time: {simulator.time} -> {ref_date}")
 
         if simulator.time % cfg.time_resolution == 0:
             output = simulator.get_output()
             # Save the output to the specified folder
-            raster_writer.write_raster(
-                output.fire_probability,
-                c_time=simulator.time,
-                ref_date=ref_date
-            )
-
-            metadata_writer.write_metadata(
-                output.stats,
-                c_time=simulator.time,
-                ref_date=ref_date
-            )
+            writer.write_output(output)
 
         if simulator.time > cfg.time_limit:
             break
+
 
 # %%
 if __name__ == "__main__":

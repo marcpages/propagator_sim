@@ -256,7 +256,6 @@ class Propagator:
             )
         self.scheduler.add_boundary_conditions(boundary_condition)
 
-
     def compute_spotting(
         self,
         veg_type: npt.NDArray[np.integer],
@@ -604,7 +603,7 @@ class Propagator:
 
         if scheduler_event.wind_speed is not None:
             self.wind_speed = scheduler_event.wind_speed
-        
+
         if scheduler_event.vegetation_changes is not None:
             # mutate vegetation where needed
             mask = ~np.isnan(scheduler_event.vegetation_changes)
