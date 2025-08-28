@@ -65,7 +65,7 @@ class Propagator:
     do_spotting: bool
 
     # set fuels
-    fuels: FuelSystem = field(default_factory=lambda: FUEL_SYSTEM_LEGACY)
+    fuels: FuelSystem = field(default_factory=FUEL_SYSTEM_LEGACY)
 
     # selected simulation functions
     p_time_fn: PTimeFn = field(default=get_p_time_fn("default"))
