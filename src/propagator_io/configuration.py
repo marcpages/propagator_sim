@@ -3,8 +3,9 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Mapping, Dict
 from warnings import warn
+import yaml
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -18,12 +19,11 @@ from propagator.functions import (
 from propagator.propagator import (
     BoundaryConditions
 )
-from propagator.models import FuelSystem
+from propagator.models import Fuel, FuelSystem
 from propagator.constants import FUEL_SYSTEM_LEGACY
 from propagator_io.boundary_conditions import TimedInput
 from propagator_io.geo import GeographicInfo
 from propagator_io.geometry import DEFAULT_EPSG_GEOMETRY, Geometry, GeometryParser
-from propagator_io.fuel import fuels_from_yaml
 
 
 # ---- configuration ----------------------------------------------------------
@@ -223,3 +223,24 @@ class PropagatorConfigurationLegacy(BaseModel):
         # NOTE: boundary conditions should be sorted by time already
 
         return [bc.get_boundary_conditions(geo_info, non_vegetated) for bc in self.boundary_conditions]
+
+
+def fuels_from_yaml(path: str | Path) -> FuelSystem:
+    path = Path(path)
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    fuels_node = data.get("fuels")
+    if not isinstance(fuels_node, Mapping):
+        raise ValueError("YAML must contain 'fuels' (mapping)")
+    # coerce IDs to int and build Fuel objects
+    fuels: Dict[int, Fuel] = {}
+    for k, v in fuels_node.items():
+        try:
+            fid = int(k)
+        except Exception as e:
+            raise ValueError(f"fuel ID '{k}' is not an integer") from e
+        if not isinstance(v, Mapping):
+            raise ValueError(f"fuel entry for ID {fid} must be a mapping")
+        fuels[fid] = Fuel(**dict(v))
+    # build the FuelSystem
+    fs = FuelSystem(fuels=fuels)
+    return fs
