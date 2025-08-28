@@ -19,7 +19,6 @@ from propagator.constants import (
     NEIGHBOURS_ARRAY,
     NEIGHBOURS_DISTANCE,
     P_C0,
-    P_CD_CONIFER,
     FUEL_SYSTEM_LEGACY
 )
 from propagator.functions import (
@@ -289,34 +288,35 @@ class Propagator:
             times for spotted ignitions.
         """
         moisture = self.get_moisture()
-        # only cells that have veg = fire-prone conifers are selected
-        conifer_mask = veg_type == 5
-        conifer_r, conifer_c, conifer_t = (
-            update[conifer_mask, 0],
-            update[conifer_mask, 1],
-            update[conifer_mask, 2],
+        # only cells that have veg as emitters for spotting are considered
+        spotting_mask = np.isin(veg_type, list(self.fuels.which_spotting()))
+        spotting_r, spotting_c, spotting_t = (
+            update[spotting_mask, 0],
+            update[spotting_mask, 1],
+            update[spotting_mask, 2],
         )
-
-        # calculate number of embers per emitter
-
-        num_embers = RNG.poisson(LAMBDA_SPOTTING, size=conifer_r.shape)
-
+        # calculate number of embers per emitter > Poisson distribution
+        num_embers = RNG.poisson(LAMBDA_SPOTTING, size=spotting_r.shape)
         # create list of source points for each ember
-        conifer_arr_r = conifer_r.repeat(repeats=num_embers)
-        conifer_arr_c = conifer_c.repeat(repeats=num_embers)
-        conifer_arr_t = conifer_t.repeat(repeats=num_embers)
-        # calculate angle and distance
-        ember_angle = RNG.uniform(0, 2.0 * np.pi, size=conifer_arr_r.shape)
-        ember_distance = fire_spotting(ember_angle, self.wind_dir, self.wind_speed)
-
+        spotting_arr_r = spotting_r.repeat(repeats=num_embers)
+        spotting_arr_c = spotting_c.repeat(repeats=num_embers)
+        spotting_arr_t = spotting_t.repeat(repeats=num_embers)
+        # calculate angle > uniform distribution
+        ember_angle = RNG.uniform(0, 2.0 * np.pi, size=spotting_arr_r.shape)
+        # calculate distance > depends on wind speed and direction
+        # NOTE: it is computed considering wind speed and direction
+        # of the cell of origin of the ember
+        ember_distance = fire_spotting(
+            ember_angle,
+            self.wind_dir[spotting_arr_r, spotting_arr_c],
+            self.wind_speed[spotting_arr_r, spotting_arr_c])
         # filter out short embers
         idx_long_embers = ember_distance > 2 * CELLSIZE
-        conifer_arr_r = conifer_arr_r[idx_long_embers]
-        conifer_arr_c = conifer_arr_c[idx_long_embers]
-        conifer_arr_t = conifer_arr_t[idx_long_embers]
+        spotting_arr_r = spotting_arr_r[idx_long_embers]
+        spotting_arr_c = spotting_arr_c[idx_long_embers]
+        spotting_arr_t = spotting_arr_t[idx_long_embers]
         ember_angle = ember_angle[idx_long_embers]
         ember_distance = ember_distance[idx_long_embers]
-
         # calculate landing locations
         # vertical delta [meters]
         delta_r = ember_distance * np.cos(ember_angle)
@@ -326,55 +326,46 @@ class Propagator:
         nb_spot_r = nb_spot_r.astype(int)
         nb_spot_c = delta_c / CELLSIZE  # number of horizontal cells
         nb_spot_c = nb_spot_c.astype(int)
-
         # vertical location of the cell to be ignited by the ember
-        nr_spot = conifer_arr_r + nb_spot_r
+        nr_spot = spotting_arr_r + nb_spot_r
         # horizontal location of the cell to be ignited by the ember
-        nc_spot = conifer_arr_c + nb_spot_c
-        nt_spot = conifer_arr_t
-
+        nc_spot = spotting_arr_c + nb_spot_c
+        nt_spot = spotting_arr_t
+        # if I surpass the bounds, I stick to them.
+        # This way I don't have to reshape anything.
         shape = self.fire.shape
-        # if I surpass the bounds, I stick to them. This way I don't have to reshape anything.
         nr_spot[nr_spot > shape[0] - 1] = shape[0] - 1
         nc_spot[nc_spot > shape[1] - 1] = shape[1] - 1
         nr_spot[nr_spot < 0] = 0
         nc_spot[nc_spot < 0] = 0
-
-        # we want to put another probabilistic filter in order to assess the success of ember ignition.
-        #
+        # we want to put another probabilistic filter in order
+        # to assess the success of ember ignition.
         # Formula (10) of Alexandridis et al IJWLF 2011
-        # P_c = P_c0 (1 + P_cd), where P_c0 constant probability of ignition by spotting and P_cd is a correction factor that
-        # depends on vegetation type and density...
-        # In this case, we put P_cd = 0.3 for conifers and 0 for the rest. but it can be generalized..
-
-        # + 0.4 * bushes_mask.... etc etc
-        P_c = P_C0 * (1 + P_CD_CONIFER * (self.veg[nr_spot, nc_spot] == 5))
-
+        # P_c = P_c0 (1 + P_cd), where P_c0 constant probability of ignition
+        # by spotting and P_cd is a correction factor that
+        # depends on vegetation type and density > set on the fuels system
+        P_c = P_C0 * (
+            1 + self.fuels.get_prob_ign_by_embers(self.veg[nr_spot, nc_spot]))
         success_spot_mask = RNG.uniform(size=P_c.shape) < P_c
         nr_spot = nr_spot[success_spot_mask]
         nc_spot = nc_spot[success_spot_mask]
         nt_spot = nt_spot[success_spot_mask]
-        # A little more debug on the previous part is advised
-
-        # the following function evalates the time that the embers  will need to burn the entire cell  they land into
-        # transition_time_spot = self.p_time(self.dem[nr_spot, nc_spot], self.dem[nr_spot, nc_spot], #evaluation of the propagation time of the "spotted cells"
-        veg_from = self.veg[nr_spot, nc_spot]
-        v0 = self.fuels.get_v0(veg_from) / 60  # tempo in minuti di attraversamento di una cella
+        # the following function evalates the time that the embers
+        # will need to burn the entire cell they land into
+        veg_to = self.veg[nr_spot, nc_spot]
+        v0 = self.fuels.get_v0(veg_to) / 60  # ros [m/min]
         transition_time_spot, _ros_spot = self.p_time_fn(
             v0,
+            # dh=0 (no slope) to simplify the phenomenon
             self.dem[nr_spot, nc_spot],
-            self.dem[
-                nr_spot, nc_spot
-            ],  # evaluation of the propagation time of the "spotted cells"
-            # dh=0 (no slope) and veg_from=veg_to to simplify the phenomenon
-            # ember_angle, ember_distance,
-            np.zeros(nr_spot.shape),
+            self.dem[nr_spot, nc_spot],
+            np.zeros(nr_spot.shape),  # angle to
             CELLSIZE * np.ones(nr_spot.shape),
             moisture[nr_spot, nc_spot],
-            self.wind_dir,
-            self.wind_speed,
+            # wind in the cell where the ember lands
+            self.wind_dir[nr_spot, nc_spot],
+            self.wind_speed[nr_spot, nc_spot],
         )
-
         return nr_spot, nc_spot, nt_spot, transition_time_spot
 
     def apply_updates(self, updates: UpdateBatch) -> list[Ignitions]:

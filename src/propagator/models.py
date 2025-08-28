@@ -22,8 +22,6 @@ UpdateBatch = List[CoordsArray]
 
 RNG = np.random.default_rng(12345)
 
-ArrayLikeInt = Union[int, np.ndarray]
-
 
 class PropagatorError(Exception):
     """Domain-specific error raised by PROPAGATOR."""
@@ -36,9 +34,10 @@ class Fuel():
     d1: float
     hhv: float
     humidity: float
-    probability: Dict[int, float]
+    spread_probability: Dict[int, float]
     name: Optional[str] = None
     spotting: bool = False
+    prob_ign_by_embers: float = 0.0
     burn: bool = True
 
 
@@ -56,6 +55,7 @@ class FuelSystem():
     _d1_arr: np.ndarray = field(init=False, repr=False)
     _hhv_arr: np.ndarray = field(init=False, repr=False)
     _hum_arr: np.ndarray = field(init=False, repr=False)
+    _embers_arr: np.ndarray = field(init=False, repr=False)
     _P: np.ndarray = field(init=False, repr=False)  # transition matrix
 
     def __post_init__(self):
@@ -74,7 +74,7 @@ class FuelSystem():
         # checks on transition probabilities
         expected_id_set = set(self.fuels.keys())
         for k, fuel in self.fuels.items():
-            probs = fuel.probability
+            probs = fuel.spread_probability
             if len(probs) == 0:
                 raise ValueError(f"fuel ID {k} must have set transition probabilities")
             if len(probs.keys()) != n:
@@ -92,10 +92,11 @@ class FuelSystem():
         self._d1_arr = np.array([self.fuels[i].d1 for i in self._ids_sorted], dtype=float)
         self._hhv_arr = np.array([self.fuels[i].hhv for i in self._ids_sorted], dtype=float)
         self._hum_arr = np.array([self.fuels[i].humidity for i in self._ids_sorted], dtype=float)
+        self._embers_arr = np.array([self.fuels[i].prob_ign_by_embers for i in self._ids_sorted], dtype=float)
         # full probability matrix P[i,j] with IDs mapped to compact indices
         self._P = np.empty((n, n), dtype=float)
         for j, fid_j in enumerate(self._ids_sorted):
-            probs = self.fuels[fid_j].probability
+            probs = self.fuels[fid_j].spread_probability
             self._P[:, j] = [probs[fid_i] for fid_i in self._ids_sorted]
         return self
 
@@ -112,62 +113,63 @@ class FuelSystem():
         return set(fid for fid, f in self.fuels.items() if f.spotting)
 
     # ---------- helpers ----------
-    def _as_array_ids(self, ids: ArrayLikeInt) -> Tuple[np.ndarray, bool]:
-        """Return (array_of_ids, was_scalar)."""
-        if np.isscalar(ids):
-            return np.array(ids, dtype=int), True
-        arr = np.asarray(ids, dtype=int)
-        return arr, False
-
-    def _ids_to_indices(self, ids_arr: np.ndarray) -> np.ndarray:
+    def _ids_to_indices(
+        self, ids_arr: npt.NDArray[np.integer]
+    ) -> npt.NDArray[np.integer]:
         """Map fuel IDs to compact 0..n-1 indices (validates IDs)."""
         flat = ids_arr.ravel()
         missing = [int(x) for x in flat if int(x) not in self._id2idx]
         if missing:
             raise ValueError(f"unknown fuel ID(s): {sorted(set(missing))}")
-        mapped = np.fromiter((self._id2idx[int(x)] for x in flat), count=flat.size, dtype=int)
+        mapped = np.fromiter((self._id2idx[int(x)] for x in flat),
+                             count=flat.size, dtype=int)
         return mapped.reshape(ids_arr.shape)
 
     # ---------- public getters (vectorized) ----------
-    def get_transition_probability(self, from_id: ArrayLikeInt, to_id: ArrayLikeInt) -> Union[float, np.ndarray]:
-        f_ids, f_scalar = self._as_array_ids(from_id)
-        t_ids, t_scalar = self._as_array_ids(to_id)
-        fi = self._ids_to_indices(f_ids)
-        ti = self._ids_to_indices(t_ids)
+    def get_transition_probability(
+        self, from_id: npt.NDArray[np.integer], to_id: npt.NDArray[np.integer]
+    ) -> npt.NDArray[np.floating]:
+        fi = self._ids_to_indices(from_id)
+        ti = self._ids_to_indices(to_id)
         # elementwise selection with broadcasting (e.g., scalar vs array)
         fi, ti = np.broadcast_arrays(fi, ti)
-        out = self._P[fi, ti]
-        return float(out) if (f_scalar and t_scalar) else out
+        return self._P[fi, ti]
 
-    def get_v0(self, fuel_id: ArrayLikeInt) -> Union[float, np.ndarray]:
-        ids, scalar = self._as_array_ids(fuel_id)
-        idx = self._ids_to_indices(ids)
-        out = self._v0_arr[idx]
-        return float(out) if scalar else out
+    def get_v0(
+        self, fuel_id: npt.NDArray[np.integer]
+    ) -> npt.NDArray[np.floating]:
+        idx = self._ids_to_indices(fuel_id)
+        return self._v0_arr[idx]
 
-    def get_d0(self, fuel_id: ArrayLikeInt) -> Union[float, np.ndarray]:
-        ids, scalar = self._as_array_ids(fuel_id)
-        idx = self._ids_to_indices(ids)
-        out = self._d0_arr[idx]
-        return float(out) if scalar else out
+    def get_d0(
+        self, fuel_id: npt.NDArray[np.integer]
+    ) -> npt.NDArray[np.floating]:
+        idx = self._ids_to_indices(fuel_id)
+        return self._d0_arr[idx]
 
-    def get_d1(self, fuel_id: ArrayLikeInt) -> Union[float, np.ndarray]:
-        ids, scalar = self._as_array_ids(fuel_id)
-        idx = self._ids_to_indices(ids)
-        out = self._d1_arr[idx]
-        return float(out) if scalar else out
+    def get_d1(
+        self, fuel_id: npt.NDArray[np.integer]
+    ) -> npt.NDArray[np.floating]:
+        idx = self._ids_to_indices(fuel_id)
+        return self._d1_arr[idx]
 
-    def get_hhv(self, fuel_id: ArrayLikeInt) -> Union[float, np.ndarray]:
-        ids, scalar = self._as_array_ids(fuel_id)
-        idx = self._ids_to_indices(ids)
-        out = self._hhv_arr[idx]
-        return float(out) if scalar else out
+    def get_hhv(
+        self, fuel_id: npt.NDArray[np.integer]
+    ) -> npt.NDArray[np.floating]:
+        idx = self._ids_to_indices(fuel_id)
+        return self._hhv_arr[idx]
 
-    def get_humidity(self, fuel_id: ArrayLikeInt) -> Union[float, np.ndarray]:
-        ids, scalar = self._as_array_ids(fuel_id)
-        idx = self._ids_to_indices(ids)
-        out = self._hum_arr[idx]
-        return float(out) if scalar else out
+    def get_humidity(
+        self, fuel_id: npt.NDArray[np.integer]
+    ) -> npt.NDArray[np.floating]:
+        idx = self._ids_to_indices(fuel_id)
+        return self._hum_arr[idx]
+
+    def get_prob_ign_by_embers(
+        self, fuel_id: npt.NDArray[np.integer]
+    ) -> npt.NDArray[np.floating]:
+        idx = self._ids_to_indices(fuel_id)
+        return self._embers_arr[idx]
 
 
 @dataclass(frozen=True)

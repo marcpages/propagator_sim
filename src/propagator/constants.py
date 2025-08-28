@@ -164,9 +164,8 @@ C_MOIST = -0.014
 LAMBDA_SPOTTING = 2.0
 SPOTTING_RN_MEAN = 100
 SPOTTING_RN_STD = 25
-# P_c = P_c0 (1 + P_cd), where P_c0 constant probability of ignition by spotting and P_cd is a correction factor that
+# P_c = P_c0 (1 + P_cd), where P_c0 constant spread_probability of ignition by spotting and P_cd is a correction factor that
 # depends on vegetation type and density...
-P_CD_CONIFER = 0.4
 P_C0 = 0.6
 
 # variable for fireline intensity
@@ -176,26 +175,78 @@ Q = 2442.0
 # --- FUEL SYSTEM LEGACY ---
 FUEL_SYSTEM_LEGACY = FuelSystem(
     fuels={
-        1: Fuel(name="broadleaves", v0=140, d0=1.5, d1=3, hhv=20000, humidity=60,
-                probability={1: 0.3, 2: 0.375, 3: 0.005, 4: 0.45, 5: 0.225, 6: 0.25, 7: 0.075},
-                spotting=False, burn=True),
-        2: Fuel(name="shrubs", v0=140, d0=1, d1=3, hhv=21000, humidity=45,
-                probability={1: 0.375, 2: 0.375, 3: 0.005, 4: 0.475, 5: 0.325, 6: 0.25, 7: 0.1},
-                spotting=False, burn=True),
-        3: Fuel(name="non-vegetated", v0=20, d0=0.1, d1=0, hhv=100, humidity=-9999,
-                probability={1: 0.005, 2: 0.005, 3: 0.005, 4: 0.005, 5: 0.005, 6: 0.005, 7: 0.005},
-                spotting=False, burn=False),
-        4: Fuel(name="grassland", v0=120, d0=0.5, d1=0, hhv=17000, humidity=-9999,
-                probability={1: 0.25, 2: 0.35, 3: 0.005, 4: 0.475, 5: 0.1, 6: 0.3, 7: 0.075},
-                spotting=False, burn=True),
-        5: Fuel(name="conifers", v0=200, d0=1, d1=4, hhv=21000, humidity=55,
-                probability={1: 0.275, 2: 0.4, 3: 0.005, 4: 0.475, 5: 0.35, 6: 0.475, 7: 0.275},
-                spotting=True, burn=True),
-        6: Fuel(name="agro-forestry areas", v0=120, d0=0.5, d1=2, hhv=19000, humidity=60,
-                probability={1: 0.25, 2: 0.3, 3: 0.005, 4: 0.375, 5: 0.2, 6: 0.35, 7: 0.075},
-                spotting=False, burn=True),
-        7: Fuel(name="non-fire prone forests", v0=60, d0=1, d1=2, hhv=18000, humidity=65,
-                probability={1: 0.25, 2: 0.375, 3: 0.005, 4: 0.475, 5: 0.35, 6: 0.25, 7: 0.075},
-                spotting=False, burn=True)
+        1: Fuel(name="broadleaves",
+                v0=140, d0=1.5, d1=3, hhv=20000, humidity=60,
+                spread_probability={1: 0.3,
+                                    2: 0.375,
+                                    3: 0.005,
+                                    4: 0.45,
+                                    5: 0.225,
+                                    6: 0.25,
+                                    7: 0.075}
+                ),
+        2: Fuel(name="shrubs",
+                v0=140, d0=1, d1=3, hhv=21000, humidity=45,
+                spread_probability={1: 0.375,
+                                    2: 0.375,
+                                    3: 0.005,
+                                    4: 0.475,
+                                    5: 0.325,
+                                    6: 0.25,
+                                    7: 0.1}
+                ),
+        3: Fuel(name="non-vegetated",
+                v0=20, d0=0.1, d1=0, hhv=100, humidity=-9999,
+                spread_probability={1: 0.005,
+                                    2: 0.005,
+                                    3: 0.005,
+                                    4: 0.005,
+                                    5: 0.005,
+                                    6: 0.005,
+                                    7: 0.005},
+                burn=False
+                ),
+        4: Fuel(name="grassland",
+                v0=120, d0=0.5, d1=0, hhv=17000, humidity=-9999,
+                spread_probability={1: 0.25,
+                                    2: 0.35,
+                                    3: 0.005,
+                                    4: 0.475,
+                                    5: 0.1,
+                                    6: 0.3,
+                                    7: 0.075}
+                ),
+        5: Fuel(name="conifers",
+                v0=200, d0=1, d1=4, hhv=21000, humidity=55,
+                spread_probability={1: 0.275,
+                                    2: 0.4,
+                                    3: 0.005,
+                                    4: 0.475,
+                                    5: 0.35,
+                                    6: 0.475,
+                                    7: 0.275},
+                spotting=True,
+                prob_ign_by_embers=0.4
+                ),
+        6: Fuel(name="agro-forestry areas",
+                v0=120, d0=0.5, d1=2, hhv=19000, humidity=60,
+                spread_probability={1: 0.25,
+                                    2: 0.3,
+                                    3: 0.005,
+                                    4: 0.375,
+                                    5: 0.2,
+                                    6: 0.35,
+                                    7: 0.075}
+                ),
+        7: Fuel(name="non-fire prone forests",
+                v0=60, d0=1, d1=2, hhv=18000, humidity=65,
+                spread_probability={1: 0.25,
+                                    2: 0.375,
+                                    3: 0.005,
+                                    4: 0.475,
+                                    5: 0.35,
+                                    6: 0.25,
+                                    7: 0.075}
+                )
     }
 )
