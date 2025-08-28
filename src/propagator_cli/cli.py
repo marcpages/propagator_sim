@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Literal, Optional
 from warnings import warn
 
-import numpy as np
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pyproj import CRS, Proj
@@ -95,7 +94,7 @@ class PropagatorCLILegacy(BaseSettings):
                 )
             if self.tilespath is None:
                 raise ValueError("TILESPATH path must be provided in 'tiles' mode")
-            
+
             if not self.tilespath.exists():
                 raise ValueError(f"TILESPATH path {self.tilespath} does not exist")
         return self
@@ -145,7 +144,7 @@ def main():
             dem_file=str(cfg.dem),
             veg_file=str(cfg.fuel),
         )
-    else: 
+    else:
         raise ValueError(f"Unknown mode {cli.mode}")
 
     # Load the data
@@ -200,7 +199,8 @@ def main():
         **args,
     )
 
-    boundary_conditions_list = cfg.get_boundary_conditions(geo_info)
+    non_vegetated = cfg.fuel_system.get_non_vegetated()
+    boundary_conditions_list = cfg.get_boundary_conditions(geo_info, non_vegetated)
     for boundary_condition in boundary_conditions_list:
         simulator.set_boundary_conditions(boundary_condition)
 

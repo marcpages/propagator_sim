@@ -216,8 +216,8 @@ class PropagatorConfigurationLegacy(BaseModel):
         return self
 
     def get_boundary_conditions(
-        self, geo_info: GeographicInfo
+        self, geo_info: GeographicInfo, non_vegetated: int
     ) -> List[BoundaryConditions]:
         # NOTE: boundary conditions should be sorted by time already
 
-        return [bc.get_boundary_conditions(geo_info) for bc in self.boundary_conditions]
+        return [bc.get_boundary_conditions(geo_info, non_vegetated) for bc in self.boundary_conditions]

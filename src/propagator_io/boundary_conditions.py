@@ -100,7 +100,7 @@ class TimedInput(BaseModel):
     def get_boundary_conditions(
         self,
         geo_info: GeographicInfo,
-        non_vegetated: int = 0,
+        non_vegetated: int,
     ) -> BoundaryConditions:
         # rasterize weather conditions > so far given as scalars
         w_speed_arr = np.ones(geo_info.shape) * self.w_speed
