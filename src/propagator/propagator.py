@@ -64,7 +64,7 @@ class Propagator:
     do_spotting: bool
 
     # set fuels
-    fuels: FuelSystem = field(default_factory=FUEL_SYSTEM_LEGACY)
+    fuels: FuelSystem = field(default_factory=lambda: FUEL_SYSTEM_LEGACY)
 
     # selected simulation functions
     p_time_fn: PTimeFn = field(default=get_p_time_fn("default"))
@@ -91,14 +91,16 @@ class Propagator:
         self.scheduler = Scheduler(realizations=self.realizations)
         self.fire = np.zeros(shape + (self.realizations,), dtype=np.int8)
         self.ros = np.zeros(shape + (self.realizations,), dtype=np.float16)
-        self.fireline_int = np.zeros(shape + (self.realizations,), dtype=np.float16)
+        self.fireline_int = np.zeros(shape + (self.realizations,),
+                                     dtype=np.float16)
         self.actions_moisture = np.zeros(shape, dtype=np.float16)
         # check if unique values in veg (apart of 0) are in fuels keys
         veg_types = np.unique(self.veg)
         for vt in veg_types:
             if vt != 0 and vt not in self.fuels.get_keys():
                 raise ValueError(
-                    f"vegetation type {vt} found in veg raster is not present in fuels keys {self.fuels.get_keys()}"
+                    f"vegetation type {vt} found in veg raster is not present \
+                        in fuels keys {self.fuels.get_keys()}"
                 )
 
     def set_ignitions(self, ignitions: Ignitions) -> None:
@@ -242,7 +244,7 @@ class Propagator:
 
         p_moist = self.p_moist_fn(moist)
         p_moist = np.clip(p_moist, 0, 1.0)
-        p_veg = self.fuels.get_transition_probability(veg_from, veg_to)
+        p_veg = self.fuels.get_transition_probabilities(veg_from, veg_to)
         probability = 1 - (1 - p_veg) ** alpha_wh
         probability = np.clip(probability * p_moist, 0, 1.0)
 
@@ -344,16 +346,17 @@ class Propagator:
         # P_c = P_c0 (1 + P_cd), where P_c0 constant probability of ignition
         # by spotting and P_cd is a correction factor that
         # depends on vegetation type and density > set on the fuels system
+        fuels_to = self.fuels.get_fuels(self.veg[nr_spot, nc_spot])
         P_c = P_C0 * (
-            1 + self.fuels.get_prob_ign_by_embers(self.veg[nr_spot, nc_spot]))
+            1 + np.array([f.prob_ign_by_embers for f in fuels_to]))
         success_spot_mask = RNG.uniform(size=P_c.shape) < P_c
         nr_spot = nr_spot[success_spot_mask]
         nc_spot = nc_spot[success_spot_mask]
         nt_spot = nt_spot[success_spot_mask]
         # the following function evalates the time that the embers
         # will need to burn the entire cell they land into
-        veg_to = self.veg[nr_spot, nc_spot]
-        v0 = self.fuels.get_v0(veg_to) / 60  # ros [m/min]
+        fuels_to = self.fuels.get_fuels(self.veg[nr_spot, nc_spot])
+        v0 = np.array([f.v0 for f in fuels_to]) / 60  # ros [m/min]
         transition_time_spot, _ros_spot = self.p_time_fn(
             v0,
             # dh=0 (no slope) to simplify the phenomenon
@@ -486,7 +489,8 @@ class Propagator:
 
         # get the propagation time for the propagating pixels
         # transition_time = self.p_time(dem_from[p], dem_to[p],
-        v0 = self.fuels.get_v0(veg_from) / 60
+        fuel_from = self.fuels.get_fuels(veg_from)
+        v0 = np.array([f.v0 for f in fuel_from]) / 60
         transition_time, ros = self.p_time_fn(
             v0,
             dem_from,
@@ -497,10 +501,11 @@ class Propagator:
             w_dir_r,
             w_speed_r,
         )
-        d0 = self.fuels.get_d0(veg_to)
-        d1 = self.fuels.get_d1(veg_to)
-        hhv = self.fuels.get_hhv(veg_to)
-        humidity = self.fuels.get_humidity(veg_to)
+        fuel_to = self.fuels.get_fuels(veg_to)
+        d0 = np.array([f.d0 for f in fuel_to])
+        d1 = np.array([f.d1 for f in fuel_to])
+        hhv = np.array([f.hhv for f in fuel_to])
+        humidity = np.array([f.humidity for f in fuel_to])
 
         # evaluate LHV of dead fuel
         lhv_dead_fuel_value = lhv_dead_fuel(hhv, moisture_r)
