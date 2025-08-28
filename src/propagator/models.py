@@ -6,9 +6,9 @@ moisture inputs. Public dataclasses capture boundary conditions, actions,
 summary statistics, and output snapshots suitable for CLI and IO layers.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional, Protocol
+from typing import List, Optional, Protocol, Dict
 
 import numpy as np
 import numpy.typing as npt
@@ -37,6 +37,72 @@ class Fuel():
     name: Optional[str] = None
     spotting: bool = False
     burn: bool = True
+
+
+@dataclass
+class FuelSystem():
+    fuels: Dict[int, Fuel]
+    transition: Dict[int, Dict[int, float]]
+    _n_fuels: int = field(init=False)
+    _non_vegetated: int = field(init=False)
+    _ids_to_keys: Dict[int, int] = field(default_factory=dict, init=False)
+
+    def __post_init__(self):
+        # checks on fuels
+        n = len(self.fuels)
+        self._n_fuels = n
+        if n == 0:
+            raise ValueError("at least one fuel is required")
+        # the ids must be ordered, if not reorder the dictionary
+        id_order = sorted(self.fuels.keys())
+        self.fuels = {fid: self.fuels[fid] for fid in id_order}
+        # set link ids-keys
+        self._ids_to_keys = {id + 1: fid for id, fid in enumerate(self.fuels.keys())}
+        # check if fuel with burn=False is unique and save the code
+        non_veg_ids = [fid for fid, f in self.fuels.items() if not f.burn]
+        if len(non_veg_ids) == 0:
+            raise ValueError("at least one fuel must have burn=False")
+        if len(non_veg_ids) > 1:
+            raise ValueError(f"only one fuel can have burn=False, got {non_veg_ids}")
+        self._non_vegetated = non_veg_ids[0]
+        # checks on transition
+        if len(self.transition.keys()) != n:
+            raise ValueError(f"transition must have {n} rows")
+        expected_id_set = set(self.fuels.keys())
+        for k in self.transition.keys():
+            if k not in expected_id_set:
+                raise ValueError(f"transition contains unknown fuel ID {k}")
+            row = self.transition[k]
+            if len(row.keys()) != n:
+                raise ValueError(f"transition row {k} must have {n} entries")
+            for j in row.keys():
+                if j not in expected_id_set:
+                    raise ValueError(f"transition row {k} contains unknown fuel ID {j}")
+                val = float(row[j])
+                if not (0.0 <= val <= 1.0):
+                    raise ValueError(f"transition probability P[{k},{j}]={val} must be in [0, 1]")
+                self.transition[k][j] = val  # coerce to float
+        return self
+
+    def get_prob_table(self) -> npt.NDArray[np.floating]:
+        prob_table = np.zeros((self._n_fuels, self._n_fuels), dtype=np.float64)
+        for j, from_id in self._ids_to_keys.items():
+            for i, to_id in self._ids_to_keys.items():
+                prob_table[i-1, j-1] = self.transition[from_id][to_id]
+        return prob_table
+
+    def get_fuels(self) -> List[Fuel]:
+        return [self.fuels[fid] for fid in self._ids_to_keys.values()]
+
+    def get_non_vegetated(self) -> int:
+        return self._non_vegetated
+
+    def convert_fuel_array(self, fuel_in: npt.NDArray[np.integer]) -> npt.NDArray[np.integer]:
+        shape = fuel_in.shape
+        fuel_out = np.zeros(shape, dtype=np.int32)
+        for fid, k in self._ids_to_keys.items():
+            fuel_out[fuel_in == k] = fid
+        return fuel_out
 
 
 @dataclass(frozen=True)

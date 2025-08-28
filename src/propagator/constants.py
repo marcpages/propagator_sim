@@ -6,6 +6,7 @@ moisture effects, as well as fire-spotting and intensity parameters.
 
 import numpy as np
 from numpy import pi, array
+from propagator.models import FuelSystem, Fuel
 
 CELLSIZE = 20
 
@@ -170,3 +171,27 @@ P_C0 = 0.6
 
 # variable for fireline intensity
 Q = 2442.0
+
+
+# --- FUEL SYSTEM LEGACY ---
+FUEL_SYSTEM_LEGACY = FuelSystem(
+    fuels={
+        1: Fuel(name="broadleaves", v0=140, d0=1.5, d1=3, hhv=20000, humidity=60, spotting=False, burn=True),
+        2: Fuel(name="shrubs", v0=140, d0=1, d1=3, hhv=21000, humidity=45, spotting=False, burn=True),
+        3: Fuel(name="non-vegetated", v0=20, d0=0.1, d1=0, hhv=100, humidity=-9999, spotting=False, burn=False),
+        4: Fuel(name="grassland", v0=120, d0=0.5, d1=0, hhv=17000, humidity=-9999, spotting=False, burn=True),
+        5: Fuel(name="conifers", v0=200, d0=1, d1=4, hhv=21000, humidity=55, spotting=True, burn=True),
+        6: Fuel(name="agro-forestry areas", v0=120, d0=0.5, d1=2, hhv=19000, humidity=60, spotting=False, burn=True),
+        7: Fuel(name="non-fire prone forests", v0=60, d0=1, d1=2, hhv=18000, humidity=65, spotting=False, burn=True)
+    },
+    transition={
+        # burning cell j: {neighbor cell i: probability j->i}
+        1: {1: 0.3, 2: 0.375, 3: 0.005, 4: 0.45, 5: 0.225, 6: 0.25, 7: 0.075},
+        2: {1: 0.375, 2: 0.375, 3: 0.005, 4: 0.475, 5: 0.325, 6: 0.25, 7: 0.1},
+        3: {1: 0.005, 2: 0.005, 3: 0.005, 4: 0.005, 5: 0.005, 6: 0.005, 7: 0.005},
+        4: {1: 0.25, 2: 0.35, 3: 0.005, 4: 0.475, 5: 0.1, 6: 0.3, 7: 0.075},
+        5: {1: 0.275, 2: 0.4, 3: 0.005, 4: 0.475, 5: 0.35, 6: 0.475, 7: 0.275},
+        6: {1: 0.25, 2: 0.3, 3: 0.005, 4: 0.375, 5: 0.2, 6: 0.35, 7: 0.075},
+        7: {1: 0.25, 2: 0.375, 3: 0.005, 4: 0.475, 5: 0.35, 6: 0.25, 7: 0.075}
+    },
+)

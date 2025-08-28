@@ -16,12 +16,14 @@ from propagator.functions import (
     get_p_time_fn,
 )
 from propagator.propagator import (
-    BoundaryConditions,
+    BoundaryConditions
 )
+from propagator.models import FuelSystem
+from propagator.constants import FUEL_SYSTEM_LEGACY
 from propagator_io.boundary_conditions import TimedInput
 from propagator_io.geo import GeographicInfo
 from propagator_io.geometry import DEFAULT_EPSG_GEOMETRY, Geometry, GeometryParser
-from propagator_io.fuel import FuelSystem, FUEL_SYSTEM_LEGACY
+from propagator_io.fuel import fuels_from_yaml
 
 
 # ---- configuration ----------------------------------------------------------
@@ -182,7 +184,7 @@ class PropagatorConfigurationLegacy(BaseModel):
 
         # set fuel system
         if self.fuel_config is not None:
-            self.fuel_system = FuelSystem.from_yaml(self.fuel_config)
+            self.fuel_system = fuels_from_yaml(self.fuel_config)
 
         # check if boundary condition is empty
         if len(self.boundary_conditions) == 0:
