@@ -21,12 +21,13 @@ from propagator.propagator import (
 from propagator_io.boundary_conditions import TimedInput
 from propagator_io.geo import GeographicInfo
 from propagator_io.geometry import DEFAULT_EPSG_GEOMETRY, Geometry, GeometryParser
+from propagator_io.fuel import FuelSystem, FUEL_SYSTEM_LEGACY
 
 
 # ---- configuration ----------------------------------------------------------
 class PropagatorConfigurationLegacy(BaseModel):
     """Propagator configuration"""
-
+    fuel_config: Optional[Path] = Field(None, description="Path to fuel configuration file (YAML)")
     mode: Literal["tileset", "geotiff"] = Field(
         "tileset",
         description="Mode of static data load: 'tileset' for automatic, "
@@ -74,8 +75,21 @@ class PropagatorConfigurationLegacy(BaseModel):
     )
     p_time_fn: Optional[object] = Field(default=None, exclude=True)
     p_moist_fn: Optional[object] = Field(default=None, exclude=True)
+    fuel_system: FuelSystem = Field(default=FUEL_SYSTEM_LEGACY, exclude=True)
 
     # ---------- checks ----------
+    @field_validator("fuel_config", mode="before")
+    @classmethod
+    def _check_fuel_config_file(cls, v: str | Path | None) -> Optional[Path]:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = Path(v)
+        # check if the file exists
+        if not v.is_file():
+            raise ValueError("Fuel configuration file not found.")
+        return v
+
     @field_validator("dem", "fuel", mode="before")
     @classmethod
     def _check_dem_fuel_files(cls, v: str | Path) -> Path:
@@ -83,7 +97,7 @@ class PropagatorConfigurationLegacy(BaseModel):
             v = Path(v)
         # check if the file exists
         if v is not None and not v.is_file():
-            raise ValueError("DEM file not found.")
+            raise ValueError("file not found.")
         return v
 
     @field_validator("output", mode="before")
@@ -165,6 +179,10 @@ class PropagatorConfigurationLegacy(BaseModel):
                 f"Unknown moisture model: \
                 {self.prob_moist_model}"
             )
+
+        # set fuel system
+        if self.fuel_config is not None:
+            self.fuel_system = FuelSystem.from_yaml(self.fuel_config)
 
         # check if boundary condition is empty
         if len(self.boundary_conditions) == 0:

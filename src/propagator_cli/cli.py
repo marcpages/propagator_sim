@@ -28,6 +28,7 @@ class PropagatorCLILegacy(BaseSettings):
     model_config = SettingsConfigDict(cli_parse_args=True)
 
     config: Path = Field(..., description="Path to configuration file (JSON)")
+    fuel_config: Optional[Path] = Field(None, description="Path to fuel configuration file (YAML)")
     mode: Literal["tiles", "geotiff"] = Field(
         "tiles",
         description="Mode of static data load: 'tileset' for automatic, "
@@ -41,18 +42,14 @@ class PropagatorCLILegacy(BaseSettings):
         None,
         description="Path to FUEL file (GeoTIFF), required in 'geotiff' mode",
     )
-
     tilespath: Optional[Path] = Field(
         None,
         description="Base Path to TILES file (GeoTIFF), required in 'tiles' mode",
     )
-
     tileset: Optional[str] = Field(
         None,
         description="Tileset to be used in 'tiles' mode (default: 'default')",
     )
-
-
     output: Path = Field(
         ...,
         description="Path to output folder where results will be saved",
@@ -133,10 +130,6 @@ def main():
     cfg = cli.build_configuration()
     ok_msg("Configuration loaded")
 
-    v0 = np.loadtxt("example/v0_table.txt")
-    prob_table = np.loadtxt("example/prob_table.txt")
-    p_veg = np.loadtxt("example/p_vegetation.txt")
-
     loader: PropagatorInputDataProtocol
     if cli.mode == "tiles":
         loader = PropagatorDataFromTiles(
@@ -201,9 +194,8 @@ def main():
         dem=dem,
         veg=veg,
         realizations=cfg.realizations,
-        ros_0=v0,
-        probability_table=prob_table,
-        veg_parameters=p_veg,
+        fuels=cfg.fuel_system.get_fuels(),
+        probability_table=cfg.fuel_system.get_prob_table(),
         do_spotting=cfg.do_spotting,
         **args,
     )

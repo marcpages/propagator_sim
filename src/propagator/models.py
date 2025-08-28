@@ -28,6 +28,18 @@ class PropagatorError(Exception):
 
 
 @dataclass(frozen=True)
+class Fuel():
+    v0: float
+    d0: float
+    d1: float
+    hhv: float
+    humidity: float
+    name: Optional[str] = None
+    spotting: bool = False
+    burn: bool = True
+
+
+@dataclass(frozen=True)
 class Ignitions:
     time: int
     coords: CoordsArray

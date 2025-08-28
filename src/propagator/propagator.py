@@ -31,6 +31,7 @@ from propagator.functions import (
     w_h_effect_on_probability,
 )
 from propagator.models import (
+    Fuel,
     BoundaryConditions,
     Ignitions,
     PMoistFn,
@@ -62,9 +63,8 @@ class Propagator:
     realizations: int
 
     # simulation parameters
-    ros_0: npt.NDArray[np.floating]
+    fuels:  list[Fuel]
     probability_table: npt.NDArray[np.floating]
-    veg_parameters: npt.NDArray[np.floating]
     do_spotting: bool
 
     # selected simulation functions
@@ -352,7 +352,7 @@ class Propagator:
         # the following function evalates the time that the embers  will need to burn the entire cell  they land into
         # transition_time_spot = self.p_time(self.dem[nr_spot, nc_spot], self.dem[nr_spot, nc_spot], #evaluation of the propagation time of the "spotted cells"
         transition_time_spot, _ros_spot = self.p_time_fn(
-            self.ros_0,
+            np.array([f.v0 for f in self.fuels]),
             self.dem[nr_spot, nc_spot],
             self.dem[
                 nr_spot, nc_spot
@@ -489,7 +489,7 @@ class Propagator:
         # get the propagation time for the propagating pixels
         # transition_time = self.p_time(dem_from[p], dem_to[p],
         transition_time, ros = self.p_time_fn(
-            self.ros_0,
+            np.array([f.v0 for f in self.fuels]),
             dem_from,
             dem_to,
             veg_from,
@@ -500,11 +500,14 @@ class Propagator:
             w_dir_r,
             w_speed_r,
         )
-
-        d0 = self.veg_parameters[veg_to - 1, 0]
-        d1 = self.veg_parameters[veg_to - 1, 1]
-        hhv = self.veg_parameters[veg_to - 1, 2]
-        humidity = self.veg_parameters[veg_to - 1, 3]
+        d0_arr = np.array([f.d0 for f in self.fuels])
+        d1_arr = np.array([f.d1 for f in self.fuels])
+        hhv_arr = np.array([f.hhv for f in self.fuels])
+        humidity_arr = np.array([f.humidity for f in self.fuels])
+        d0 = d0_arr[veg_to - 1]
+        d1 = d1_arr[veg_to - 1]
+        hhv = hhv_arr[veg_to - 1]
+        humidity = humidity_arr[veg_to - 1]
 
         # evaluate LHV of dead fuel
         lhv_dead_fuel_value = lhv_dead_fuel(hhv, moisture_r)
