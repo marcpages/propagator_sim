@@ -64,7 +64,7 @@ def load_parameters(
 def get_p_time_fn(ros_model_code: ROS_model_literal) -> PTimeFn:
     """Select a rate-of-spread model by code.
 
-    Returns a function with signature `(v0, dem_from, dem_to, veg_from, veg_to,
+    Returns a function with signature `(v0, dem_from, dem_to,
     angle_to, dist, moist, w_dir, w_speed) -> (time, ros)`.
     """
     match ros_model_code:
@@ -92,10 +92,9 @@ def get_p_moist_fn(moist_model_code: Moisture_model_literal) -> PMoistFn:
 
 
 def p_time_rothermel(
+    v0: npt.NDArray[np.integer],
     dem_from: npt.NDArray[np.floating],
     dem_to: npt.NDArray[np.floating],
-    veg_from: npt.NDArray[np.integer],
-    veg_to: npt.NDArray[np.integer],
     angle_to: npt.NDArray[np.floating],
     dist: npt.NDArray[np.floating],
     moist: npt.NDArray[np.floating],
@@ -108,8 +107,6 @@ def p_time_rothermel(
     ----------
     dem_from, dem_to : numpy.ndarray
         Elevation at source and neighbor cells.
-    veg_from, veg_to : numpy.ndarray
-        Vegetation types (1-based) at source and neighbor cells.
     angle_to : numpy.ndarray
         Direction to neighbor (radians).
     dist : numpy.ndarray
@@ -128,8 +125,6 @@ def p_time_rothermel(
     """
     # velocità di base modulata con la densità(tempo di attraversamento)
     dh = dem_to - dem_from
-
-    v = v0[veg_from - 1] / 60  # tempo in minuti di attraversamento di una cella
 
     real_dist = np.sqrt((CELLSIZE * dist) ** 2 + dh**2)
 
@@ -151,7 +146,7 @@ def p_time_rothermel(
     wf_rescaled = wf / 13  # wind factor rescaled to have 10 as max value
     wf_clip = np.clip(wf_rescaled, 1, 20)  # max value is 20, min is 1
 
-    v_wh_pre = v * sf_clip * wf_clip  # Rate of Spread evaluate with Rothermel's model
+    v_wh_pre = v0 * sf_clip * wf_clip  # Rate of Spread evaluate with Rothermel's model
     moist_eff = np.exp(C_MOIST * moist)  # moisture effect
 
     # v_wh = np.clip(v_wh_pre, 0.01, 100) #adoptable RoS
@@ -168,8 +163,6 @@ def p_time_wang(
     v0: npt.NDArray[np.floating],
     dem_from: npt.NDArray[np.floating],
     dem_to: npt.NDArray[np.floating],
-    veg_from: npt.NDArray[np.integer],
-    veg_to: npt.NDArray[np.integer],
     angle_to: npt.NDArray[np.floating],
     dist: npt.NDArray[np.floating],
     moist: npt.NDArray[np.floating],
@@ -184,8 +177,6 @@ def p_time_wang(
         Base ROS vector per vegetation type.
     dem_from, dem_to : numpy.ndarray
         Elevation at source and neighbor cells.
-    veg_from, veg_to : numpy.ndarray
-        Vegetation types (1-based) at source and neighbor cells.
     angle_to : numpy.ndarray
         Direction to neighbor (radians).
     dist : numpy.ndarray
@@ -204,8 +195,6 @@ def p_time_wang(
     """
     # velocità di base modulata con la densità(tempo di attraversamento)
     dh = dem_to - dem_from
-
-    v = v0[veg_from - 1] / 60  # tempo in minuti di attraversamento di una cella
 
     real_dist = np.sqrt((CELLSIZE * dist) ** 2 + dh**2)
 
@@ -227,7 +216,7 @@ def p_time_wang(
     sf_clip = np.clip(sf, 0.01, 10)
 
     # Rate of Spread evaluate with Wang Zhengfei's model
-    v_wh_pre = v * wf_clip * sf_clip
+    v_wh_pre = v0 * wf_clip * sf_clip
     moist_eff = np.exp(C_MOIST * moist)  # moisture effect
 
     # v_wh = np.clip(v_wh_pre, 0.01, 100) #adoptable RoS
@@ -244,8 +233,6 @@ def p_time_standard(
     v0: npt.NDArray[np.floating],
     dem_from: npt.NDArray[np.floating],
     dem_to: npt.NDArray[np.floating],
-    veg_from: npt.NDArray[np.integer],
-    veg_to: npt.NDArray[np.integer],
     angle_to: npt.NDArray[np.floating],
     dist: npt.NDArray[np.floating],
     moist: npt.NDArray[np.floating],
@@ -260,8 +247,6 @@ def p_time_standard(
         Base ROS vector per vegetation type.
     dem_from, dem_to : numpy.ndarray
         Elevation at source and neighbor cells.
-    veg_from, veg_to : numpy.ndarray
-        Vegetation types (1-based) at source and neighbor cells.
     angle_to : numpy.ndarray
         Direction to neighbor (radians).
     dist : numpy.ndarray
@@ -279,11 +264,10 @@ def p_time_standard(
         (transition time [min], ROS [m/min]).
     """
     dh = dem_to - dem_from
-    v = v0[veg_from - 1] / 60
     wh = w_h_effect(angle_to, w_speed, w_dir, dh, dist)
     moist_eff = np.exp(C_MOIST * moist)  # moisture effect
 
-    v_wh = np.clip(v * wh * moist_eff, 0.01, 100)
+    v_wh = np.clip(v0 * wh * moist_eff, 0.01, 100)
 
     real_dist = np.sqrt((CELLSIZE * dist) ** 2 + dh**2)
     t = real_dist / v_wh

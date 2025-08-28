@@ -20,6 +20,7 @@ from propagator.constants import (
     NEIGHBOURS_DISTANCE,
     P_C0,
     P_CD_CONIFER,
+    FUEL_SYSTEM_LEGACY
 )
 from propagator.functions import (
     fire_spotting,
@@ -31,7 +32,7 @@ from propagator.functions import (
     w_h_effect_on_probability,
 )
 from propagator.models import (
-    Fuel,
+    FuelSystem,
     BoundaryConditions,
     Ignitions,
     PMoistFn,
@@ -61,11 +62,10 @@ class Propagator:
     veg: npt.NDArray[np.integer]
     dem: npt.NDArray[np.floating]
     realizations: int
-
-    # simulation parameters
-    fuels:  list[Fuel]
-    probability_table: npt.NDArray[np.floating]
     do_spotting: bool
+
+    # set fuels
+    fuels: FuelSystem = field(default_factory=lambda: FUEL_SYSTEM_LEGACY)
 
     # selected simulation functions
     p_time_fn: PTimeFn = field(default=get_p_time_fn("default"))
@@ -94,6 +94,13 @@ class Propagator:
         self.ros = np.zeros(shape + (self.realizations,), dtype=np.float16)
         self.fireline_int = np.zeros(shape + (self.realizations,), dtype=np.float16)
         self.actions_moisture = np.zeros(shape, dtype=np.float16)
+        # check if unique values in veg (apart of 0) are in fuels keys
+        veg_types = np.unique(self.veg)
+        for vt in veg_types:
+            if vt != 0 and vt not in self.fuels.get_keys():
+                raise ValueError(
+                    f"vegetation type {vt} found in veg raster is not present in fuels keys {self.fuels.get_keys()}"
+                )
 
     def set_ignitions(self, ignitions: Ignitions) -> None:
         """
@@ -236,7 +243,7 @@ class Propagator:
 
         p_moist = self.p_moist_fn(moist)
         p_moist = np.clip(p_moist, 0, 1.0)
-        p_veg = self.probability_table[veg_to - 1, veg_from - 1]
+        p_veg = self.fuels.get_transition_probability(veg_from, veg_to)
         probability = 1 - (1 - p_veg) ** alpha_wh
         probability = np.clip(probability * p_moist, 0, 1.0)
 
@@ -351,15 +358,15 @@ class Propagator:
 
         # the following function evalates the time that the embers  will need to burn the entire cell  they land into
         # transition_time_spot = self.p_time(self.dem[nr_spot, nc_spot], self.dem[nr_spot, nc_spot], #evaluation of the propagation time of the "spotted cells"
+        veg_from = self.veg[nr_spot, nc_spot]
+        v0 = self.fuels.get_v0(veg_from) / 60  # tempo in minuti di attraversamento di una cella
         transition_time_spot, _ros_spot = self.p_time_fn(
-            np.array([f.v0 for f in self.fuels]),
+            v0,
             self.dem[nr_spot, nc_spot],
             self.dem[
                 nr_spot, nc_spot
             ],  # evaluation of the propagation time of the "spotted cells"
             # dh=0 (no slope) and veg_from=veg_to to simplify the phenomenon
-            self.veg[nr_spot, nc_spot],
-            self.veg[nr_spot, nc_spot],
             # ember_angle, ember_distance,
             np.zeros(nr_spot.shape),
             CELLSIZE * np.ones(nr_spot.shape),
@@ -488,26 +495,21 @@ class Propagator:
 
         # get the propagation time for the propagating pixels
         # transition_time = self.p_time(dem_from[p], dem_to[p],
+        v0 = self.fuels.get_v0(veg_from) / 60
         transition_time, ros = self.p_time_fn(
-            np.array([f.v0 for f in self.fuels]),
+            v0,
             dem_from,
             dem_to,
-            veg_from,
-            veg_to,
             angle_to,
             dist_to,
             moisture_r,
             w_dir_r,
             w_speed_r,
         )
-        d0_arr = np.array([f.d0 for f in self.fuels])
-        d1_arr = np.array([f.d1 for f in self.fuels])
-        hhv_arr = np.array([f.hhv for f in self.fuels])
-        humidity_arr = np.array([f.humidity for f in self.fuels])
-        d0 = d0_arr[veg_to - 1]
-        d1 = d1_arr[veg_to - 1]
-        hhv = hhv_arr[veg_to - 1]
-        humidity = humidity_arr[veg_to - 1]
+        d0 = self.fuels.get_d0(veg_to)
+        d1 = self.fuels.get_d1(veg_to)
+        hhv = self.fuels.get_hhv(veg_to)
+        humidity = self.fuels.get_humidity(veg_to)
 
         # evaluate LHV of dead fuel
         lhv_dead_fuel_value = lhv_dead_fuel(hhv, moisture_r)

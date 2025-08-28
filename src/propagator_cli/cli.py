@@ -193,8 +193,7 @@ def main():
         dem=dem,
         veg=veg,
         realizations=cfg.realizations,
-        fuels=cfg.fuel_system.get_fuels(),
-        probability_table=cfg.fuel_system.get_prob_table(),
+        fuels=cfg.fuel_system,
         do_spotting=cfg.do_spotting,
         **args,
     )
