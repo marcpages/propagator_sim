@@ -123,7 +123,9 @@ def test_init_shapes_and_types(sample_propagator):
 
 def test_set_ignitions_schedules(sample_propagator):
     prop = sample_propagator
-    ignitions = np.array([[True, False, False], [False, True, False], [False, False, False]])
+    ignitions = np.array(
+        [[True, False, False], [False, True, False], [False, False, False]]
+    )
     t_ignite = 1
 
     prop.set_ignitions(ignitions, t_ignite)
@@ -150,7 +152,13 @@ def test_set_boundary_conditions_and_past_time(sample_propagator):
 
     with pytest.raises(ValueError):
         prop.set_boundary_conditions(
-            BoundaryConditions(time=prop.time - 1, ignitions=None, moisture=None, wind_dir=None, wind_speed=None)
+            BoundaryConditions(
+                time=prop.time - 1,
+                ignitions=None,
+                moisture=None,
+                wind_dir=None,
+                wind_speed=None,
+            )
         )
 
 
@@ -267,7 +275,9 @@ def test_apply_actions_and_decay_and_get_moisture(sample_propagator):
     )
     prev = prop.veg.copy()
     prop.apply_actions(
-        Actions(time=prop.time, additional_moisture=None, vegetation_changes=veg_changes)
+        Actions(
+            time=prop.time, additional_moisture=None, vegetation_changes=veg_changes
+        )
     )
     expected = prev.copy()
     expected[0, 1] = 0
@@ -286,7 +296,9 @@ def test_apply_actions_and_decay_and_get_moisture(sample_propagator):
     # Past actions time rejected
     with pytest.raises(ValueError):
         prop.apply_actions(
-            Actions(time=prop.time - 1, additional_moisture=None, vegetation_changes=None)
+            Actions(
+                time=prop.time - 1, additional_moisture=None, vegetation_changes=None
+            )
         )
 
 
@@ -303,10 +315,12 @@ def test_apply_updates_and_scheduling(sample_propagator, monkeypatch):
     prop.wind_speed = np.full(prop.veg.shape, 5.0)
 
     # Deterministic p_time_fn (already set in fixture); return 4 updates
-    prop.p_time_fn = MagicMock(return_value=(
-        np.array([1.0, 2.0, 1.5, 2.5]),
-        np.array([10.0, 8.0, 12.0, 9.0]),
-    ))
+    prop.p_time_fn = MagicMock(
+        return_value=(
+            np.array([1.0, 2.0, 1.5, 2.5]),
+            np.array([10.0, 8.0, 12.0, 9.0]),
+        )
+    )
 
     # Control RNG for propagation decision
     monkeypatch.setattr("propagator.propagator.RNG", MagicMock())
@@ -371,7 +385,9 @@ def test_get_output(sample_propagator, monkeypatch):
     prop.fireline_int = np.full(prop.veg.shape + (prop.realizations,), 100.0)
 
     # Decouple from scheduler internals
-    monkeypatch.setattr(prop, "compute_stats", lambda v: PropagatorStats(1, 1.0, 1.0, 1.0, 1.0))
+    monkeypatch.setattr(
+        prop, "compute_stats", lambda v: PropagatorStats(1, 1.0, 1.0, 1.0, 1.0)
+    )
 
     out = prop.get_output()
     assert isinstance(out, PropagatorOutput)
@@ -387,4 +403,3 @@ def test_get_output(sample_propagator, monkeypatch):
     if out.fli_max is not None:
         assert np.allclose(out.fli_max, prop.compute_fireline_int_max())
     assert isinstance(out.stats, PropagatorStats)
-

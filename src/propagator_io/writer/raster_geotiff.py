@@ -69,7 +69,7 @@ class GeoTiffWriter(RasterWriterProtocol):
                     dst_prj,
                     trim=self.trim,
                 )
-                
+
             elif self.trim:
                 values, dst_trans = trim_values(values, dst_trans)
 

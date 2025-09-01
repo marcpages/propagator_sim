@@ -3,10 +3,10 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import List, Literal, Optional, Mapping, Dict
+from typing import List, Literal, Optional, Mapping, Dict, Tuple
 from warnings import warn
 import yaml
-
+import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---- project utils ----------------------------------------------------------
@@ -16,9 +16,7 @@ from propagator.functions import (
     get_p_moist_fn,
     get_p_time_fn,
 )
-from propagator.propagator import (
-    BoundaryConditions
-)
+from propagator.propagator import BoundaryConditions
 from propagator.models import Fuel, FuelSystem
 from propagator.constants import FUEL_SYSTEM_LEGACY
 from propagator_io.boundary_conditions import TimedInput
@@ -29,7 +27,10 @@ from propagator_io.geometry import DEFAULT_EPSG_GEOMETRY, Geometry, GeometryPars
 # ---- configuration ----------------------------------------------------------
 class PropagatorConfigurationLegacy(BaseModel):
     """Propagator configuration"""
-    fuel_config: Optional[Path] = Field(None, description="Path to fuel configuration file (YAML)")
+
+    fuel_config: Optional[Path] = Field(
+        None, description="Path to fuel configuration file (YAML)"
+    )
     mode: Literal["tileset", "geotiff"] = Field(
         "tileset",
         description="Mode of static data load: 'tileset' for automatic, "
@@ -43,6 +44,10 @@ class PropagatorConfigurationLegacy(BaseModel):
     fuel: Optional[Path] = Field(
         None,
         description="Path to FUEL file (GeoTIFF), required in 'geotiff' mode",
+    )
+    tilespath: Optional[Path] = Field(
+        None,
+        description="Path to TILES folder (GeoTIFF), required in 'tileset' mode",
     )
     output: Path = Field(
         ...,
@@ -222,7 +227,22 @@ class PropagatorConfigurationLegacy(BaseModel):
     ) -> List[BoundaryConditions]:
         # NOTE: boundary conditions should be sorted by time already
 
-        return [bc.get_boundary_conditions(geo_info, non_vegetated) for bc in self.boundary_conditions]
+        return [
+            bc.get_boundary_conditions(geo_info, non_vegetated)
+            for bc in self.boundary_conditions
+        ]
+
+    def get_ignitions_middle_point(self) -> Optional[Tuple[float, float]]:
+        middle_points = [
+            bc.extract_ignitions_middle_point() for bc in self.boundary_conditions
+        ]
+        middle_points = [mp for mp in middle_points if mp is not None]
+        if not middle_points:
+            return None
+        # Return the average of the middle points
+        avg_x = float(np.mean([pt[0] for pt in middle_points]))
+        avg_y = float(np.mean([pt[1] for pt in middle_points]))
+        return avg_x, avg_y
 
 
 def fuels_from_yaml(path: str | Path) -> FuelSystem:

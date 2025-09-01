@@ -97,6 +97,11 @@ class GeometryBase(BaseModel):
             return {"type": "Polygon", "coordinates": [coords]}
         raise ValueError(f"Unsupported geometry kind: {self.kind}")
 
+    def get_middle_point(self) -> Optional[Tuple[float, float]]:
+        if self.ys.size == 0 or self.xs.size == 0:
+            return None
+        return float(np.mean(self.xs)), float(np.mean(self.ys))
+
 
 class GeoPoint(GeometryBase):
     kind: GeometryKind = GeometryKind.POINT

@@ -28,7 +28,7 @@ class PropagatorError(Exception):
 
 
 @dataclass(frozen=True)
-class Fuel():
+class Fuel:
     v0: float
     d0: float
     d1: float
@@ -42,7 +42,7 @@ class Fuel():
 
 
 @dataclass
-class FuelSystem():
+class FuelSystem:
     fuels: Dict[int, Fuel]
     # derived attributes (filled in __post_init__)
     _n_fuels: int = field(init=False)
@@ -62,27 +62,37 @@ class FuelSystem():
         if len(non_veg_ids) == 0:
             raise ValueError("at least one fuel must have burn=False")
         if len(non_veg_ids) > 1:
-            raise ValueError(f"only one fuel can have burn=False, \
-                got {non_veg_ids}")
+            raise ValueError(
+                f"only one fuel can have burn=False, \
+                got {non_veg_ids}"
+            )
         self._non_vegetated = non_veg_ids[0]
         # checks on transition probabilities
         expected_id_set = set(self.fuels.keys())
         for k, fuel in self.fuels.items():
             probs = fuel.spread_probability
             if len(probs) == 0:
-                raise ValueError(f"fuel ID {k} must have set \
-                    transition probabilities")
+                raise ValueError(
+                    f"fuel ID {k} must have set \
+                    transition probabilities"
+                )
             if len(probs.keys()) != n:
-                raise ValueError(f"fuel ID {k} must have {n} \
-                    transition probabilities")
+                raise ValueError(
+                    f"fuel ID {k} must have {n} \
+                    transition probabilities"
+                )
             for kk, p in probs.items():
                 if kk not in expected_id_set:
-                    raise ValueError(f"fuel ID {k} has unknown \
-                        transition probability on fuel ID {kk}")
+                    raise ValueError(
+                        f"fuel ID {k} has unknown \
+                        transition probability on fuel ID {kk}"
+                    )
                 if not (0.0 <= p <= 1.0):
-                    raise ValueError(f"fuel ID {k} has invalid \
+                    raise ValueError(
+                        f"fuel ID {k} has invalid \
                         transition probability P[{k},{kk}]={probs[kk]}, \
-                            must be in [0, 1]")
+                            must be in [0, 1]"
+                    )
         return self
 
     def get_keys(self) -> set[int]:
@@ -99,16 +109,15 @@ class FuelSystem():
 
     # ---------- public getters ----------
     # function for which I give an array of IDs and get an array of Fuel
-    def get_fuels(
-        self, ids_arr: npt.NDArray[np.integer]
-    ) -> npt.NDArray[Any]:
+    def get_fuels(self, ids_arr: npt.NDArray[np.integer]) -> npt.NDArray[Any]:
         """Map fuel IDs array to Fuel objects array (validates IDs)."""
         flat = ids_arr.ravel()
         missing = [int(x) for x in flat if int(x) not in self.fuels]
         if missing:
             raise ValueError(f"unknown fuel ID(s): {sorted(set(missing))}")
-        mapped = np.fromiter((self.fuels[int(x)] for x in flat),
-                             count=flat.size, dtype=object)
+        mapped = np.fromiter(
+            (self.fuels[int(x)] for x in flat), count=flat.size, dtype=object
+        )
         return mapped.reshape(ids_arr.shape)
 
     def get_fuel(self, fuel_id: int) -> Fuel:
@@ -118,8 +127,7 @@ class FuelSystem():
         return fuel
 
     def get_transition_probabilities(
-        self,
-        from_ids: npt.NDArray[np.integer], to_ids: npt.NDArray[np.integer]
+        self, from_ids: npt.NDArray[np.integer], to_ids: npt.NDArray[np.integer]
     ) -> npt.NDArray[np.floating]:
         """Get array of transition probabilities P[from_id, to_id]."""
         if from_ids.shape != to_ids.shape:
@@ -128,15 +136,21 @@ class FuelSystem():
         flat_to = to_ids.ravel()
         missing = [int(x) for x in flat_from if int(x) not in self.fuels]
         if missing:
-            raise ValueError(f"unknown fuel-from ID(s): \
-                {sorted(set(missing))}")
+            raise ValueError(
+                f"unknown fuel-from ID(s): \
+                {sorted(set(missing))}"
+            )
         missing = [int(x) for x in flat_to if int(x) not in self.fuels]
         if missing:
-            raise ValueError(f"unknown fuel-to ID(s): \
-                {sorted(set(missing))}")
+            raise ValueError(
+                f"unknown fuel-to ID(s): \
+                {sorted(set(missing))}"
+            )
         probs = np.fromiter(
-            (self.fuels[int(f)].spread_probability[int(t)]
-             for f, t in zip(flat_from, flat_to)),
+            (
+                self.fuels[int(f)].spread_probability[int(t)]
+                for f, t in zip(flat_from, flat_to)
+            ),
             count=flat_from.size,
             dtype=np.float64,
         )
@@ -181,9 +195,7 @@ class PropagatorStats:
     area_75: float
     area_90: float
 
-    def to_dict(
-        self, c_time: int, ref_date: datetime
-    ) -> dict[str, float | int | str]:
+    def to_dict(self, c_time: int, ref_date: datetime) -> dict[str, float | int | str]:
         return dict(
             c_time=c_time,
             ref_date=ref_date.isoformat(),
@@ -239,5 +251,4 @@ class PMoistFn(Protocol):
         Probability multiplier in [0, 1].
     """
 
-    def __call__(self, moist: npt.NDArray[np.floating]
-                 ) -> npt.NDArray[np.floating]: ...
+    def __call__(self, moist: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]: ...

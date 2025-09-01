@@ -139,7 +139,6 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
     geo_info: GeographicInfo
     dst_prj: Proj
 
-
     thresholds: list[float] = field(default_factory=lambda: [0.5, 0.75, 0.9])
     med_filt_val: int = 9
     min_length: float = 0.0001

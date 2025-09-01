@@ -27,7 +27,9 @@ class PropagatorCLILegacy(BaseSettings):
     model_config = SettingsConfigDict(cli_parse_args=True)
 
     config: Path = Field(..., description="Path to configuration file (JSON)")
-    fuel_config: Optional[Path] = Field(None, description="Path to fuel configuration file (YAML)")
+    fuel_config: Optional[Path] = Field(
+        None, description="Path to fuel configuration file (YAML)"
+    )
     mode: Literal["tiles", "geotiff"] = Field(
         "tiles",
         description="Mode of static data load: 'tileset' for automatic, "
@@ -78,13 +80,9 @@ class PropagatorCLILegacy(BaseSettings):
                     provided in 'geotiff' mode"
                 )
             if self.tileset is not None:
-                warn(
-                    "TILESET will be ignored in 'geotiff' mode"
-                )
+                warn("TILESET will be ignored in 'geotiff' mode")
             if self.tilespath is not None:
-                warn(
-                    "TILESPATH will be ignored in 'geotiff' mode"
-                )
+                warn("TILESPATH will be ignored in 'geotiff' mode")
 
         elif self.mode == "tiles":
             if self.dem is not None or self.fuel is not None:
@@ -116,7 +114,7 @@ def main():
     # pydantic-settings is taking care of it
     cli = PropagatorCLILegacy()  # type: ignore
     ok_msg("CLI initialized")
-    print(cli.model_dump())
+    # print(cli.model_dump())
 
     if cli.record:
         basename = f"propagator_run_{simulation_time.strftime('%Y%m%d_%H%M%S')}"
@@ -131,13 +129,19 @@ def main():
 
     loader: PropagatorInputDataProtocol
     if cli.mode == "tiles":
+        # first extract middle point from configuration
+        mid_point = cfg.get_ignitions_middle_point()
+        if mid_point is None:
+            raise ValueError("Ignitions must be defined in the configuration.")
+
         loader = PropagatorDataFromTiles(
             base_path=str(cfg.tilespath),
             tileset=cli.tileset if cli.tileset is not None else "default",
-            mid_lat=0,
-            mid_lon=0,
+            mid_lat=mid_point[0],
+            mid_lon=mid_point[1],
             grid_dim=2000,
         )
+
     elif cli.mode == "geotiff":
         # loader geographic information
         loader = PropagatorDataFromGeotiffs(

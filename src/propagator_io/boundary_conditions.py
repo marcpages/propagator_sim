@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
-from pydantic import (
-    BaseModel, ConfigDict, Field, field_validator, model_validator
-)
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from propagator.propagator import (
     BoundaryConditions,
 )
@@ -140,12 +138,10 @@ class TimedInput(BaseModel):
                     )
                     additional_moisture = moist_final - moisture_arr
                 # fuel actions
-                fuel_action = action.rasterize_action_fuel(
-                    geo_info, non_vegetated)
+                fuel_action = action.rasterize_action_fuel(geo_info, non_vegetated)
                 if fuel_action is not None:
                     if vegetation_changes is None:
-                        vegetation_changes = np.zeros(geo_info.shape,
-                                                      dtype=int)
+                        vegetation_changes = np.zeros(geo_info.shape, dtype=int)
                     vegetation_changes = np.where(
                         np.isnan(fuel_action),
                         vegetation_changes,
@@ -162,3 +158,24 @@ class TimedInput(BaseModel):
             additional_moisture=additional_moisture,
             vegetation_changes=vegetation_changes,
         )
+
+    def extract_ignitions_middle_point(self) -> Optional[Tuple[float, float]]:
+        """
+        Extracts the middle coordinates from ignitions
+        """
+        if self.ignitions is None or len(self.ignitions) == 0:
+            return None
+        ignitions_middle_points = [
+            ignition.get_middle_point() for ignition in self.ignitions
+        ]
+        ignitions_middle_points = [
+            mp for mp in ignitions_middle_points if mp is not None
+        ]
+
+        if not ignitions_middle_points:
+            return None
+
+        # Return the average of the middle points
+        avg_x = float(np.mean([pt[0] for pt in ignitions_middle_points]))
+        avg_y = float(np.mean([pt[1] for pt in ignitions_middle_points]))
+        return avg_x, avg_y

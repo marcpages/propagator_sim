@@ -19,7 +19,7 @@ from propagator.constants import (
     NEIGHBOURS_ARRAY,
     NEIGHBOURS_DISTANCE,
     P_C0,
-    FUEL_SYSTEM_LEGACY
+    FUEL_SYSTEM_LEGACY,
 )
 from propagator.functions import (
     fire_spotting,
@@ -91,8 +91,7 @@ class Propagator:
         self.scheduler = Scheduler(realizations=self.realizations)
         self.fire = np.zeros(shape + (self.realizations,), dtype=np.int8)
         self.ros = np.zeros(shape + (self.realizations,), dtype=np.float16)
-        self.fireline_int = np.zeros(shape + (self.realizations,),
-                                     dtype=np.float16)
+        self.fireline_int = np.zeros(shape + (self.realizations,), dtype=np.float16)
         self.actions_moisture = np.zeros(shape, dtype=np.float16)
         # check if unique values in veg (apart of 0) are in fuels keys
         veg_types = np.unique(self.veg)
@@ -311,7 +310,8 @@ class Propagator:
         ember_distance = fire_spotting(
             ember_angle,
             self.wind_dir[spotting_arr_r, spotting_arr_c],
-            self.wind_speed[spotting_arr_r, spotting_arr_c])
+            self.wind_speed[spotting_arr_r, spotting_arr_c],
+        )
         # filter out short embers
         idx_long_embers = ember_distance > 2 * CELLSIZE
         spotting_arr_r = spotting_arr_r[idx_long_embers]
@@ -347,8 +347,7 @@ class Propagator:
         # by spotting and P_cd is a correction factor that
         # depends on vegetation type and density > set on the fuels system
         fuels_to = self.fuels.get_fuels(self.veg[nr_spot, nc_spot])
-        P_c = P_C0 * (
-            1 + np.array([f.prob_ign_by_embers for f in fuels_to]))
+        P_c = P_C0 * (1 + np.array([f.prob_ign_by_embers for f in fuels_to]))
         success_spot_mask = RNG.uniform(size=P_c.shape) < P_c
         nr_spot = nr_spot[success_spot_mask]
         nc_spot = nc_spot[success_spot_mask]
