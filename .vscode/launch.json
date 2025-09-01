@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: run main.py",
+            "name": "Python Debugger: run propagator_cli.cli",
             "type": "debugpy",
             "request": "launch",
             "module": "propagator_cli.cli", 
@@ -20,6 +20,25 @@
                 "./example/dem_clip.tif",
                 "--fuel",
                 "./example/veg_clip.tif"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "PROJ_LIB": ".venv/share/proj/"
+            }
+        },
+
+        {
+            "name": "Python Debugger: run propagator_cli.cli tiles mode",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "propagator_cli.cli", 
+            "console": "integratedTerminal",
+            "args": [
+                "--config",
+                "./example/params_tiles.json",
+                "--mode", "tiles",
+                "--tilespath", "/share/propagator/data",
+                "--output", "./example/output",
             ],
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",

@@ -32,7 +32,7 @@ class PropagatorCLILegacy(BaseSettings):
     )
     mode: Literal["tiles", "geotiff"] = Field(
         "tiles",
-        description="Mode of static data load: 'tileset' for automatic, "
+        description="Mode of static data load: 'tiles' for automatic, "
         "'geotiff' for giving DEM and FUEL in input.",
     )
     dem: Optional[Path] = Field(
@@ -134,11 +134,12 @@ def main():
         if mid_point is None:
             raise ValueError("Ignitions must be defined in the configuration.")
 
+        mid_lat, mid_lon = mid_point[1], mid_point[0]
         loader = PropagatorDataFromTiles(
             base_path=str(cfg.tilespath),
             tileset=cli.tileset if cli.tileset is not None else "default",
-            mid_lat=mid_point[0],
-            mid_lon=mid_point[1],
+            mid_lat=mid_lat,
+            mid_lon=mid_lon,
             grid_dim=2000,
         )
 

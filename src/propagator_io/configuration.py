@@ -31,11 +31,11 @@ class PropagatorConfigurationLegacy(BaseModel):
     fuel_config: Optional[Path] = Field(
         None, description="Path to fuel configuration file (YAML)"
     )
-    mode: Literal["tileset", "geotiff"] = Field(
-        "tileset",
-        description="Mode of static data load: 'tileset' for automatic, "
+    mode: Literal["tiles", "geotiff"] = Field(
+        "geotiff",
+        description="Mode of static data load: 'tiles' for automatic, "
         "'geotiff' for giving DEM and FUEL in input."
-        "[default: tileset]",
+        "[default: geotiff]",
     )
     dem: Optional[Path] = Field(
         None,
@@ -47,7 +47,7 @@ class PropagatorConfigurationLegacy(BaseModel):
     )
     tilespath: Optional[Path] = Field(
         None,
-        description="Path to TILES folder (GeoTIFF), required in 'tileset' mode",
+        description="Path to TILES folder (GeoTIFF), required in 'tiles' mode",
     )
     output: Path = Field(
         ...,
@@ -170,9 +170,9 @@ class PropagatorConfigurationLegacy(BaseModel):
                 raise ValueError("DEM path must be set in 'geotiff' mode")
             if not self.fuel:
                 raise ValueError("FUEL path must be set in 'geotiff' mode")
-        elif self.mode == "tileset" and (self.dem or self.fuel):
+        elif self.mode == "tiles" and (self.dem or self.fuel):
             warn(
-                "DEM and FUEL paths are ignored in 'tileset' mode. "
+                "DEM and FUEL paths are ignored in 'tiles' mode. "
                 "Please remove them from the configuration."
             )
 
