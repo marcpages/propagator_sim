@@ -17,17 +17,6 @@ from propagator.models import BoundaryConditions, CoordsArray, Ignitions
 PopResult = Tuple[int, "SchedulerEvent"]
 
 
-def _validate_coords(coords: npt.ArrayLike) -> CoordsArray:
-    if not isinstance(coords, np.ndarray):
-        raise TypeError("coords must be a numpy.ndarray")
-    if coords.ndim != 2 or coords.shape[1] != 3:
-        raise ValueError("coords must have shape (n, 3)")
-    if not np.issubdtype(coords.dtype, np.integer):
-        raise TypeError("coords dtype must be an integer type")
-    # Narrow the runtime type to CoordsArray for the type checker
-    return coords  # type: ignore[return-value]
-
-
 @dataclass
 class SchedulerEvent:
     """Represents a scheduled event in the simulation."""
@@ -106,9 +95,10 @@ class Scheduler:
     Generic over the time key type (int or float), so your inputs and outputs
     stay consistent.
     """
-
-    _queue: SortedDict = field(default_factory=SortedDict, init=False, repr=False)
     realizations: int
+    _queue: SortedDict = field(
+        default_factory=SortedDict, init=False, repr=False
+    )
 
     # --- Basic queue ops -----------------------------------------------------
 
@@ -122,7 +112,7 @@ class Scheduler:
         if event is None:
             raise ValueError("SchedulerEvent should not be None here")
 
-        event.coords.append(_validate_coords(ignitions.coords))
+        event.coords.append(ignitions.coords)
 
     def pop(self) -> PopResult:
         if not self:
@@ -166,14 +156,19 @@ class Scheduler:
 
         if boundary_conditions.additional_moisture is not None:
             if entry.additional_moisture is None:
-                entry.additional_moisture = boundary_conditions.additional_moisture
+                entry.additional_moisture = (
+                    boundary_conditions.additional_moisture
+                )
             else:
-                entry.additional_moisture += boundary_conditions.additional_moisture
+                entry.additional_moisture += (
+                    boundary_conditions.additional_moisture
+                )
         if boundary_conditions.vegetation_changes is not None:
             if entry.vegetation_changes is None:
-                entry.vegetation_changes = boundary_conditions.vegetation_changes
+                entry.vegetation_changes = (
+                    boundary_conditions.vegetation_changes
+                )
             else:
-                # entry.vegetation_changes += boundary_conditions.vegetation_changes
                 entry.vegetation_changes = np.where(
                     boundary_conditions.vegetation_changes == 0,
                     entry.vegetation_changes,
@@ -183,10 +178,12 @@ class Scheduler:
     def active(self) -> npt.NDArray[np.integer]:
         if not self:
             return np.array([], dtype=int)
-        arrays = [a for batches in self._queue.values() for a in batches.coords]
+        arrays = [
+            a for batches in self._queue.values() for a in batches.coords
+        ]
         if len(arrays) == 1:
             return np.unique(arrays[0][:, 2])
-        stacked = np.concatenate(arrays, axis=0)
+        stacked = np.vstack(arrays)
         return np.unique(stacked[:, 2])
 
     def __len__(self) -> int:

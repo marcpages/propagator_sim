@@ -91,7 +91,9 @@ def add_line(
     img_temp = np.zeros(img.shape)
 
     for idx in range(len(cs) - 1):
-        points = add_segment(img_temp, cs[idx], rs[idx], cs[idx + 1], rs[idx + 1], 1)
+        points = add_segment(
+            img_temp, cs[idx], rs[idx], cs[idx + 1], rs[idx + 1], 1
+        )
         if idx > 0:
             contour.extend(points[1:])
         else:
@@ -117,7 +119,9 @@ def add_poly(
     contour = []
 
     for idx in range(len(cs) - 1):
-        points = add_segment(img_temp, cs[idx], rs[idx], cs[idx + 1], rs[idx + 1], 2)
+        points = add_segment(
+            img_temp, cs[idx], rs[idx], cs[idx + 1], rs[idx + 1], 2
+        )
         if idx > 0:
             contour.extend(points[1:])
         else:

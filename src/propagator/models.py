@@ -8,10 +8,14 @@ summary statistics, and output snapshots suitable for CLI and IO layers.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional, Protocol, Dict, Any
+from typing import List, Optional, Protocol, Any
 
 import numpy as np
 import numpy.typing as npt
+from numba.experimental import jitclass
+from numba import types
+from numba.typed import Dict
+
 
 # Integer coords array of shape (n, 3). We can’t encode the shape statically
 # with stdlib typing, but we DO lock the dtype to integer families.
@@ -27,134 +31,191 @@ class PropagatorError(Exception):
     """Domain-specific error raised by PROPAGATOR."""
 
 
-@dataclass(frozen=True)
+spec = [
+    ("v0", types.float64),
+    ("d0", types.float64),
+    ("d1", types.float64),
+    ("hhv", types.float64),
+    ("humidity", types.float64),
+    ("spotting", types.boolean),
+    ("prob_ign_by_embers", types.float64),
+    ("burn", types.boolean),
+    ("name", types.string)
+]
+# v0: float
+# d0: float
+# d1: float
+# hhv: float
+# humidity: float
+# spread_probability: Dict
+# spotting: bool
+# prob_ign_by_embers: float
+# burn: bool
+# name: str
+
+
+@jitclass(spec)  # type: ignore
 class Fuel:
-    v0: float
-    d0: float
-    d1: float
-    hhv: float
-    humidity: float
-    spread_probability: Dict[int, float]
-    name: Optional[str] = None
-    spotting: bool = False
-    prob_ign_by_embers: float = 0.0
-    burn: bool = True
+    def __init__(
+        self,
+        v0: float,
+        d0: float,
+        d1: float,
+        hhv: float,
+        humidity: float,
+        name: str,
+        spotting: bool = False,
+        prob_ign_by_embers: float = 0.0,
+        burn: bool = True
+    ):
+        self.v0 = v0
+        self.d0 = d0
+        self.d1 = d1
+        self.hhv = hhv
+        self.humidity = humidity
+        self.spotting = spotting
+        self.prob_ign_by_embers = prob_ign_by_embers
+        self.burn = burn
+        self.name = name
 
 
-@dataclass
+spec = [
+    ("fuels_id", types.DictType(types.int64, types.int64)),
+    ("v0", types.float64[:]),
+    ("d0", types.float64[:]),
+    ("d1", types.float64[:]),
+    ("hhv", types.float64[:]),
+    ("humidity", types.float64[:]),
+    # ("spread_probability", types.DictType(
+    #     types.int64, types.float64[:]
+    # )),
+    ("spread_probability", types.float64[:, :]),
+    ("spotting", types.boolean[:]),
+    ("prob_ign_by_embers", types.float64[:]),
+    ("burn", types.boolean[:]),
+    ("name", types.DictType(types.int64, types.string)),
+    ("_non_vegetated", types.int64)
+]
+
+
+@jitclass(spec)
 class FuelSystem:
-    fuels: Dict[int, Fuel]
-    # derived attributes (filled in __post_init__)
-    _n_fuels: int = field(init=False)
-    _non_vegetated: int = field(init=False)
 
-    def __post_init__(self):
-        # checks on fuels
-        n = len(self.fuels)
-        self._n_fuels = n
-        if n == 0:
-            raise ValueError("at least one fuel is required")
-        # check if a key is zero, if so make it an error
-        if 0 in self.fuels:
-            raise ValueError("fuel IDs must be positive integers, got 0")
-        # check if fuel with burn=False is unique and save the code
-        non_veg_ids = [fid for fid, f in self.fuels.items() if not f.burn]
-        if len(non_veg_ids) == 0:
-            raise ValueError("at least one fuel must have burn=False")
-        if len(non_veg_ids) > 1:
-            raise ValueError(
-                f"only one fuel can have burn=False, \
-                got {non_veg_ids}"
-            )
-        self._non_vegetated = non_veg_ids[0]
-        # checks on transition probabilities
-        expected_id_set = set(self.fuels.keys())
-        for k, fuel in self.fuels.items():
-            probs = fuel.spread_probability
-            if len(probs) == 0:
-                raise ValueError(
-                    f"fuel ID {k} must have set \
-                    transition probabilities"
-                )
-            if len(probs.keys()) != n:
-                raise ValueError(
-                    f"fuel ID {k} must have {n} \
-                    transition probabilities"
-                )
-            for kk, p in probs.items():
-                if kk not in expected_id_set:
-                    raise ValueError(
-                        f"fuel ID {k} has unknown \
-                        transition probability on fuel ID {kk}"
-                    )
-                if not (0.0 <= p <= 1.0):
-                    raise ValueError(
-                        f"fuel ID {k} has invalid \
-                        transition probability P[{k},{kk}]={probs[kk]}, \
-                            must be in [0, 1]"
-                    )
-        return self
-
-    def get_keys(self) -> set[int]:
-        return set(self.fuels.keys())
-
-    def get_n_fuels(self) -> int:
-        return self._n_fuels
+    def __init__(self, n_fuels: int):
+        self.fuels_id = Dict.empty(
+            key_type=types.int64,
+            value_type=types.int64
+        )
+        self.v0 = np.zeros(n_fuels, dtype=np.float64)
+        self.d0 = np.zeros(n_fuels, dtype=np.float64)
+        self.d1 = np.zeros(n_fuels, dtype=np.float64)
+        self.hhv = np.zeros(n_fuels, dtype=np.float64)
+        self.humidity = np.zeros(n_fuels, dtype=np.float64)
+        self.spread_probability = np.zeros(
+            (n_fuels, n_fuels), dtype=np.float64
+        )
+        self.spotting = np.zeros(n_fuels, dtype=np.bool_)
+        self.prob_ign_by_embers = np.zeros(n_fuels, dtype=np.float64)
+        self.burn = np.ones(n_fuels, dtype=np.bool_)
+        self.name = Dict.empty(
+            key_type=types.int64,
+            value_type=types.string
+        )
+        self._non_vegetated = -1
 
     def get_non_vegetated(self) -> int:
         return self._non_vegetated
 
-    def which_spotting(self) -> set[int]:
-        return set(fid for fid, f in self.fuels.items() if f.spotting)
+    # def which_spotting(self) -> set[int]:
+    #     return set(fid for fid, f in self.spotting.items() if f)
 
     # ---------- public getters ----------
-    # function for which I give an array of IDs and get an array of Fuel
-    def get_fuels(self, ids_arr: npt.NDArray[np.integer]) -> npt.NDArray[Any]:
-        """Map fuel IDs array to Fuel objects array (validates IDs)."""
-        flat = ids_arr.ravel()
-        missing = [int(x) for x in flat if int(x) not in self.fuels]
-        if missing:
-            raise ValueError(f"unknown fuel ID(s): {sorted(set(missing))}")
-        mapped = np.fromiter(
-            (self.fuels[int(x)] for x in flat), count=flat.size, dtype=object
-        )
-        return mapped.reshape(ids_arr.shape)
+    def get_transition_probability(self, from_id: int, to_id: int) -> float:
+        if from_id not in self.fuels_id or to_id not in self.fuels_id:
+            raise PropagatorError(
+                f"Fuel IDs {from_id} or {to_id} do not exist."
+            )
+        i = self.fuels_id[from_id]
+        j = self.fuels_id[to_id]
+        return self.spread_probability[i, j]  # type: ignore
+
+    def add_fuel(
+        self,
+        fuel_id: int,
+        name: str,
+        v0: float,
+        d0: float,
+        d1: float,
+        hhv: float,
+        humidity: float,
+        spotting: bool = False,
+        prob_ign_by_embers: float = 0.0,
+        burn: bool = True
+    ) -> None:
+        n = len(self.fuels_id.keys())
+        if fuel_id in self.fuels_id:
+            raise PropagatorError(f"Fuel ID {fuel_id} already exists.")
+        self.fuels_id[fuel_id] = n
+        self.v0[n] = v0
+        self.d0[n] = d0
+        self.d1[n] = d1
+        self.hhv[n] = hhv
+        self.humidity[n] = humidity
+        self.spotting[n] = spotting
+        self.prob_ign_by_embers[n] = prob_ign_by_embers
+        self.burn[n] = burn
+        self.name[n] = name
+        if not burn:
+            self._non_vegetated = fuel_id
+
+    def add_transition_probability(
+        self, from_id: int, to_id: int, prob: float
+    ) -> None:
+        if from_id not in self.fuels_id or to_id not in self.fuels_id:
+            raise PropagatorError(
+                f"Fuel IDs {from_id} or {to_id} do not exist."
+            )
+        i = self.fuels_id[from_id]
+        j = self.fuels_id[to_id]
+        self.spread_probability[i, j] = prob
 
     def get_fuel(self, fuel_id: int) -> Fuel:
-        fuel = self.fuels.get(fuel_id, None)
-        if fuel is None:
-            raise ValueError(f"unknown fuel ID: {fuel_id}")
-        return fuel
-
-    def get_transition_probabilities(
-        self, from_ids: npt.NDArray[np.integer], to_ids: npt.NDArray[np.integer]
-    ) -> npt.NDArray[np.floating]:
-        """Get array of transition probabilities P[from_id, to_id]."""
-        if from_ids.shape != to_ids.shape:
-            raise ValueError("from_ids and to_ids must have the same shape")
-        flat_from = from_ids.ravel()
-        flat_to = to_ids.ravel()
-        missing = [int(x) for x in flat_from if int(x) not in self.fuels]
-        if missing:
-            raise ValueError(
-                f"unknown fuel-from ID(s): \
-                {sorted(set(missing))}"
-            )
-        missing = [int(x) for x in flat_to if int(x) not in self.fuels]
-        if missing:
-            raise ValueError(
-                f"unknown fuel-to ID(s): \
-                {sorted(set(missing))}"
-            )
-        probs = np.fromiter(
-            (
-                self.fuels[int(f)].spread_probability[int(t)]
-                for f, t in zip(flat_from, flat_to)
-            ),
-            count=flat_from.size,
-            dtype=np.float64,
+        if fuel_id not in self.fuels_id:
+            raise PropagatorError(f"Fuel ID {fuel_id} does not exist.")
+        i = self.fuels_id[fuel_id]
+        return Fuel(
+            self.v0[i],  # type: ignore
+            self.d0[i],  # type: ignore
+            self.d1[i],  # type: ignore
+            self.hhv[i],  # type: ignore
+            self.humidity[i],  # type: ignore
+            self.name[i],  # type: ignore
+            self.spotting[i],  # type: ignore
+            self.prob_ign_by_embers[i],  # type: ignore
+            self.burn[i]  # type: ignore
         )
-        return probs.reshape(from_ids.shape)
+
+
+def fuelsystem_from_dict(fuels: dict[int, dict]) -> FuelSystem:
+    n_fuels = len(fuels)
+    fuelsystem = FuelSystem(n_fuels)
+    for k, fuel in fuels.items():
+        fuelsystem.add_fuel(
+            k,
+            fuel["name"],
+            fuel["v0"],
+            fuel["d0"],
+            fuel["d1"],
+            fuel["hhv"],
+            fuel["humidity"],
+            fuel.get("spotting", False),
+            fuel.get("prob_ign_by_embers", 0.0),
+            fuel.get("burn", True)
+        )
+    for from_id, fuel in fuels.items():
+        for to_id, prob in fuel["spread_probability"].items():
+            fuelsystem.add_transition_probability(from_id, to_id, prob)
+    return fuelsystem
 
 
 @dataclass(frozen=True)
@@ -195,7 +256,9 @@ class PropagatorStats:
     area_75: float
     area_90: float
 
-    def to_dict(self, c_time: int, ref_date: datetime) -> dict[str, float | int | str]:
+    def to_dict(
+        self, c_time: int, ref_date: datetime
+    ) -> dict[str, float | int | str]:
         return dict(
             c_time=c_time,
             ref_date=ref_date.isoformat(),
@@ -232,9 +295,7 @@ class PTimeFn(Protocol):
         A pair of arrays (time_minutes, ros_m_per_min).
     """
 
-    def __call__(
-        self, *args, **kwargs
-    ) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]: ...
+    def __call__(self, *args, **kwargs) -> tuple[float, float]: ...
 
 
 class PMoistFn(Protocol):
@@ -251,4 +312,4 @@ class PMoistFn(Protocol):
         Probability multiplier in [0, 1].
     """
 
-    def __call__(self, moist: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]: ...
+    def __call__(self, moist: float) -> float: ...

@@ -11,7 +11,7 @@ class BaseWriterProtocol(Protocol):
     start_date: datetime
 
     def ref_date(self, output: PropagatorOutput) -> datetime:
-        ref_date = self.start_date + timedelta(minutes=output.time)
+        ref_date = self.start_date + timedelta(minutes=int(output.time))
         return ref_date
 
 

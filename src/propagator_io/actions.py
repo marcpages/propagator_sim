@@ -90,7 +90,9 @@ class WaterlineAction(Action):
     ) -> Optional[npt.NDArray[np.floating]]:
         mask_action = self._mask(geo_info)
         mask_buffer = ndimage.binary_dilation(mask_action)
-        moisture_action = np.where(mask_buffer, WATERLINE_ACTION_MOIST_VALUE, np.nan)
+        moisture_action = np.where(
+            mask_buffer, WATERLINE_ACTION_MOIST_VALUE, np.nan
+        )
         return moisture_action
 
 
@@ -108,8 +110,12 @@ class CanadairAction(Action):
     ) -> npt.NDArray[np.floating]:
         mask_action = self._mask(geo_info)
         mask_buffer = ndimage.binary_dilation(mask_action)
-        moisture_action = np.where(mask_buffer, CANADAIR_BUFFER_MOIST_VALUE, np.nan)
-        moisture_action = np.where(mask_action, CANADAIR_MOIST_VALUE, moisture_action)
+        moisture_action = np.where(
+            mask_buffer, CANADAIR_BUFFER_MOIST_VALUE, np.nan
+        )
+        moisture_action = np.where(
+            mask_action, CANADAIR_MOIST_VALUE, moisture_action
+        )
         return moisture_action
 
 
@@ -122,7 +128,9 @@ class HelicopterAction(Action):
     def allowed_kinds(cls) -> set[GeometryKind]:
         return {GeometryKind.LINE}
 
-    def rasterize_action(self, geo_info: GeographicInfo) -> npt.NDArray[np.floating]:
+    def rasterize_action(
+        self, geo_info: GeographicInfo
+    ) -> npt.NDArray[np.floating]:
         mask_action = self._mask(geo_info)
         # create "jittered" seed points near the line pixels
         iy, ix = np.nonzero(mask_action)
@@ -135,7 +143,9 @@ class HelicopterAction(Action):
         # one-pixel buffer around seed points
         buffer_mask = ndimage.binary_dilation(seed_mask)
         # create moisture action
-        moisture_action = np.where(buffer_mask, HELICOPTER_BUFFER_MOIST_VALUE, np.nan)
+        moisture_action = np.where(
+            buffer_mask, HELICOPTER_BUFFER_MOIST_VALUE, np.nan
+        )
         moisture_action[seed_mask] = HELICOPTER_MOIST_VALUE
         return moisture_action
 
@@ -176,7 +186,9 @@ def get_action_registry() -> dict[ActionType, Type[Action]]:
     reg: dict[ActionType, Type[Action]] = {}
     for sub in _iter_subclasses(Action):
         # Be defensive: model_fields may not exist on unrelated classes
-        fields: dict[str, Any] = cast(dict[str, Any], getattr(sub, "model_fields", {}))
+        fields: dict[str, Any] = cast(
+            dict[str, Any], getattr(sub, "model_fields", {})
+        )
         info = fields.get("action_type")
         default = getattr(info, "default", None)
         if isinstance(default, ActionType):
@@ -225,7 +237,9 @@ def parse_actions(
             # unknown/unregistered action -> ignore
             continue
         allowed = {k.value for k in cls.allowed_kinds()}
-        geoms = GeometryParser.parse_geometry_list(raw, allowed=allowed, epsg=epsg)
+        geoms = GeometryParser.parse_geometry_list(
+            raw, allowed=allowed, epsg=epsg
+        )
         if geoms:
             acc[atype].extend(geoms)
             consumed.add(key)

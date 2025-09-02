@@ -18,5 +18,5 @@ class MetadataJSONWriter(MetadataWriterProtocol):
         ref_date = self.ref_date(output)
         json_file = self.output_folder / f"{self.prefix}_{output.time}.json"
         with open(json_file, "w") as fp:
-            data = output.stats.to_dict(output.time, ref_date)
+            data = output.stats.to_dict(int(output.time), ref_date)
             json.dump(data, fp)

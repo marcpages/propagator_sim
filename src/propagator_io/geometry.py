@@ -84,7 +84,9 @@ class GeometryBase(BaseModel):
             if self.crs != dst_crs:
                 xs, ys = self._reproject_x_y(dst_crs)
         # convert to pure Python lists of [x, y]
-        coords = [[float(x), float(y)] for x, y in zip(xs.tolist(), ys.tolist())]
+        coords = [
+            [float(x), float(y)] for x, y in zip(xs.tolist(), ys.tolist())
+        ]
         if self.kind == GeometryKind.POINT:
             # GeoJSON point: [x, y]
             return {"type": "Point", "coordinates": coords[0]}
@@ -175,8 +177,12 @@ class GeometryParser:
         m_series = _SERIES_RE.match(s)
         if m_series:
             kind = m_series.group("kind").upper()
-            ys_arr = np.asarray(_split_floats(m_series.group("ys")), dtype=float)
-            xs_arr = np.asarray(_split_floats(m_series.group("xs")), dtype=float)
+            ys_arr = np.asarray(
+                _split_floats(m_series.group("ys")), dtype=float
+            )
+            xs_arr = np.asarray(
+                _split_floats(m_series.group("xs")), dtype=float
+            )
             if ys_arr.size != xs_arr.size:
                 raise ValueError(
                     f"{kind}: y/x counts differ \
@@ -191,7 +197,9 @@ class GeometryParser:
         raise ValueError(f"Unsupported geometry string: {s!r}")
 
     @staticmethod
-    def parse_geometry_list(v: list, allowed: set[str], epsg: int) -> List[Geometry]:
+    def parse_geometry_list(
+        v: list, allowed: set[str], epsg: int
+    ) -> List[Geometry]:
         if not isinstance(v, list):
             raise ValueError("expected a list")
         out: List[Geometry] = []

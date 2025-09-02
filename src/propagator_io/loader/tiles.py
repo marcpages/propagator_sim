@@ -19,7 +19,9 @@ DEFAULT_TILES_TAG = "default"
 
 class NoTilesError(PropagatorError):
     def __init__(self):
-        self.message = """Can't initialize simulation, no data on the selected area"""
+        self.message = (
+            """Can't initialize simulation, no data on the selected area"""
+        )
         super().__init__(self.message)
 
 
@@ -42,7 +44,9 @@ class PropagatorDataFromTiles(PropagatorInputDataProtocol):
         self.easting, self.northing, self.zone_number, _ = utm.from_latlon(
             self.mid_lat, self.mid_lon
         )
-        step_x, step_y, *_ = self.load_tile_ref(self.zone_number, "quo", self.tileset)
+        step_x, step_y, *_ = self.load_tile_ref(
+            self.zone_number, "quo", self.tileset
+        )
         self.step_x = step_x
         self.step_y = step_y
 
@@ -112,7 +116,9 @@ class PropagatorDataFromTiles(PropagatorInputDataProtocol):
             m = mat_file["M"]
         except FileNotFoundError:
             try:
-                filepath = join(self.base_path, tileset, str(zone_number), filename_tif)
+                filepath = join(
+                    self.base_path, tileset, str(zone_number), filename_tif
+                )
                 logging.debug(filepath)
                 with rio.open(filepath) as src:
                     m = src.read(1)
@@ -130,7 +136,9 @@ class PropagatorDataFromTiles(PropagatorInputDataProtocol):
         :param var: Variable name (e.g., "quo" or "prop")
         :param tileset: Tileset name
         """
-        filename = join(self.base_path, tileset, str(zone_number), var + "_ref.mat")
+        filename = join(
+            self.base_path, tileset, str(zone_number), var + "_ref.mat"
+        )
         logging.debug(filename)
         mat_file = scipy.io.loadmat(filename)
         step_x, step_y, max_y, min_x, tile_dim = (
@@ -184,30 +192,52 @@ class PropagatorDataFromTiles(PropagatorInputDataProtocol):
         idx_j_max = get_idx(j_max, tile_dim)
 
         if tile_i_max == tile_i_min and tile_j_max == tile_j_min:
-            m = self.load_tile(zone_number, var, tile_i_min, tile_j_min, tileset)
+            m = self.load_tile(
+                zone_number, var, tile_i_min, tile_j_min, tileset
+            )
             mat = m[idx_i_min:idx_i_max, idx_j_min:idx_j_max]
         elif tile_i_min == tile_i_max:
-            m1 = self.load_tile(zone_number, var, tile_i_min, tile_j_min, tileset)
-            m2 = self.load_tile(zone_number, var, tile_i_min, tile_j_max, tileset)
+            m1 = self.load_tile(
+                zone_number, var, tile_i_min, tile_j_min, tileset
+            )
+            m2 = self.load_tile(
+                zone_number, var, tile_i_min, tile_j_max, tileset
+            )
             m = np.concatenate([m1, m2], axis=1)
             mat = m[idx_i_min:idx_i_max, idx_j_min : (tile_dim + idx_j_max)]
 
         elif tile_j_min == tile_j_max:
-            m1 = self.load_tile(zone_number, var, tile_i_min, tile_j_min, tileset)
-            m2 = self.load_tile(zone_number, var, tile_i_max, tile_j_min, tileset)
+            m1 = self.load_tile(
+                zone_number, var, tile_i_min, tile_j_min, tileset
+            )
+            m2 = self.load_tile(
+                zone_number, var, tile_i_max, tile_j_min, tileset
+            )
             m = np.concatenate([m1, m2], axis=0)
             mat = m[idx_i_min : (tile_dim + idx_i_max), idx_j_min:idx_j_max]
         else:
-            m1 = self.load_tile(zone_number, var, tile_i_min, tile_j_min, tileset)
-            m2 = self.load_tile(zone_number, var, tile_i_min, tile_j_max, tileset)
-            m3 = self.load_tile(zone_number, var, tile_i_max, tile_j_min, tileset)
-            m4 = self.load_tile(zone_number, var, tile_i_max, tile_j_max, tileset)
+            m1 = self.load_tile(
+                zone_number, var, tile_i_min, tile_j_min, tileset
+            )
+            m2 = self.load_tile(
+                zone_number, var, tile_i_min, tile_j_max, tileset
+            )
+            m3 = self.load_tile(
+                zone_number, var, tile_i_max, tile_j_min, tileset
+            )
+            m4 = self.load_tile(
+                zone_number, var, tile_i_max, tile_j_max, tileset
+            )
             m = np.concatenate(
-                [np.concatenate([m1, m2], axis=1), np.concatenate([m3, m4], axis=1)],
+                [
+                    np.concatenate([m1, m2], axis=1),
+                    np.concatenate([m3, m4], axis=1),
+                ],
                 axis=0,
             )
             mat = m[
-                idx_i_min : (tile_dim + idx_i_max), idx_j_min : (tile_dim + idx_j_max)
+                idx_i_min : (tile_dim + idx_i_max),
+                idx_j_min : (tile_dim + idx_j_max),
             ]
 
         return mat

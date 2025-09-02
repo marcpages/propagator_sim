@@ -3,7 +3,13 @@ from __future__ import annotations
 from typing import List, Optional, Tuple
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 from propagator.propagator import (
     BoundaryConditions,
 )
@@ -138,10 +144,14 @@ class TimedInput(BaseModel):
                     )
                     additional_moisture = moist_final - moisture_arr
                 # fuel actions
-                fuel_action = action.rasterize_action_fuel(geo_info, non_vegetated)
+                fuel_action = action.rasterize_action_fuel(
+                    geo_info, non_vegetated
+                )
                 if fuel_action is not None:
                     if vegetation_changes is None:
-                        vegetation_changes = np.zeros(geo_info.shape, dtype=int)
+                        vegetation_changes = np.zeros(
+                            geo_info.shape, dtype=int
+                        )
                     vegetation_changes = np.where(
                         np.isnan(fuel_action),
                         vegetation_changes,

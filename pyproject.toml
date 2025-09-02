@@ -53,5 +53,12 @@ testpaths = [
     "tests",
 ]
 
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "Q", "I"]
+ignore = ["E203", "E501"]
+
 [project.scripts] 
 propagator = "propagator_cli.cli:main"

@@ -14,12 +14,24 @@ def parse_params():
         type=argparse.FileType("r"),
         help="parameter file for the model",
     )
-    parser.add_argument("-of", dest="output_folder", type=str, help="work folder")
-    parser.add_argument("-it", dest="image_time", type=str, help="image timing")
-    parser.add_argument("-st", dest="isochrone_time", type=int, help="isochrone timing")
-    parser.add_argument("-tl", dest="time_limit", type=int, help="time limit in hours")
     parser.add_argument(
-        "-d", dest="debug_mode", action="store_true", help="debug mode", default=False
+        "-of", dest="output_folder", type=str, help="work folder"
+    )
+    parser.add_argument(
+        "-it", dest="image_time", type=str, help="image timing"
+    )
+    parser.add_argument(
+        "-st", dest="isochrone_time", type=int, help="isochrone timing"
+    )
+    parser.add_argument(
+        "-tl", dest="time_limit", type=int, help="time limit in hours"
+    )
+    parser.add_argument(
+        "-d",
+        dest="debug_mode",
+        action="store_true",
+        help="debug mode",
+        default=False,
     )
     parser.add_argument(
         "-v",
@@ -45,7 +57,9 @@ def parse_params():
 
     parser.add_argument("-dem", dest="dem_file", help="DEM tiff file to load")
 
-    parser.add_argument("-veg", dest="veg_file", help="Vegetation tiff file to load")
+    parser.add_argument(
+        "-veg", dest="veg_file", help="Vegetation tiff file to load"
+    )
 
     parser.add_argument(
         "-spo",

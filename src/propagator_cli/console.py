@@ -111,7 +111,9 @@ def warn_msg(message: str) -> None:
 
 
 def error_msg(message: str) -> None:
-    get_console().print(Panel.fit(Text(message, style="bold red"), border_style="red"))
+    get_console().print(
+        Panel.fit(Text(message, style="bold red"), border_style="red")
+    )
 
 
 # def print_config_summary(cfg) -> None:

@@ -91,10 +91,14 @@ class PropagatorCLILegacy(BaseSettings):
                     provided in 'tiles' mode and will be ignored."
                 )
             if self.tilespath is None:
-                raise ValueError("TILESPATH path must be provided in 'tiles' mode")
+                raise ValueError(
+                    "TILESPATH path must be provided in 'tiles' mode"
+                )
 
             if not self.tilespath.exists():
-                raise ValueError(f"TILESPATH path {self.tilespath} does not exist")
+                raise ValueError(
+                    f"TILESPATH path {self.tilespath} does not exist"
+                )
         return self
 
     def build_configuration(self) -> PropagatorConfigurationLegacy:
@@ -117,7 +121,9 @@ def main():
     # print(cli.model_dump())
 
     if cli.record:
-        basename = f"propagator_run_{simulation_time.strftime('%Y%m%d_%H%M%S')}"
+        basename = (
+            f"propagator_run_{simulation_time.strftime('%Y%m%d_%H%M%S')}"
+        )
         setup_console(record_path=cli.output, basename=basename)
     else:
         setup_console()
@@ -204,7 +210,9 @@ def main():
     )
 
     non_vegetated = cfg.fuel_system.get_non_vegetated()
-    boundary_conditions_list = cfg.get_boundary_conditions(geo_info, non_vegetated)
+    boundary_conditions_list = cfg.get_boundary_conditions(
+        geo_info, non_vegetated
+    )
     for boundary_condition in boundary_conditions_list:
         simulator.set_boundary_conditions(boundary_condition)
 
@@ -214,7 +222,7 @@ def main():
             break
 
         simulator.step()
-        ref_date = cfg.init_date + timedelta(minutes=simulator.time)
+        ref_date = cfg.init_date + timedelta(minutes=int(simulator.time))
 
         info_msg(f"Time: {simulator.time} -> {ref_date}")
 

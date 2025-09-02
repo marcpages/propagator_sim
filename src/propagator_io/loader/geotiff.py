@@ -11,7 +11,9 @@ from propagator_io.loader.protocol import PropagatorInputDataProtocol
 
 def check_input_files_consistency(dem_file, veg_file):
     if dem_file.crs != veg_file.crs:
-        raise PropagatorDataLoaderException("CRS of input files are inconsistent")
+        raise PropagatorDataLoaderException(
+            "CRS of input files are inconsistent"
+        )
 
     err_res = abs(dem_file.res[0] - veg_file.res[0]) / veg_file.res[0]
     if err_res > 0.01:
@@ -34,7 +36,10 @@ def check_input_files_consistency(dem_file, veg_file):
 
 
 def load_data_from_files(veg_filename, dem_filename):
-    with rio.open(veg_filename) as veg_file, rio.open(dem_filename) as dem_file:
+    with (
+        rio.open(veg_filename) as veg_file,
+        rio.open(dem_filename) as dem_file,
+    ):
         check_input_files_consistency(dem_file, veg_file)
         try:
             dem = dem_file.read(1).astype("int16")
@@ -65,7 +70,9 @@ class PropagatorDataFromGeotiffs(PropagatorInputDataProtocol):
             ):
                 check_input_files_consistency(dem_file, veg_file)
         except PropagatorDataLoaderException as e:
-            raise PropagatorDataLoaderException(f"Error in input files: {e}") from e
+            raise PropagatorDataLoaderException(
+                f"Error in input files: {e}"
+            ) from e
 
     def get_dem(self) -> np.ndarray:
         dem, _, _ = load_data_from_files(self.veg_file, self.dem_file)

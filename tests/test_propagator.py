@@ -43,11 +43,13 @@ def mock_p_moist_fn(moist):
 def sample_propagator():
     # Small grid (3x3) with a mix of vegetation types (0 indicates non-burnable)
     veg = np.array([[1, 2, 0], [3, 4, 1], [0, 5, 2]], dtype=np.int8)
-    dem = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]], dtype=np.float32)
+    dem = np.array(
+        [[10, 11, 12], [13, 14, 15], [16, 17, 18]], dtype=np.float32
+    )
     realizations = 2
 
     # base ROS per vegetation type (five types)
-    ros_0 = np.array([5.0, 6.0, 7.0, 8.0, 9.0], dtype=np.float16)
+    ros_0 = np.array([5.0, 6.0, 7.0, 8.0, 9.0], dtype=np.float32)
 
     # probability_table[target-1, source-1]
     probability_table = np.array(
@@ -105,11 +107,11 @@ def test_init_shapes_and_types(sample_propagator):
     assert np.all(prop.fire == 0)
 
     assert prop.ros.shape == shape + (prop.realizations,)
-    assert prop.ros.dtype == np.float16
+    assert prop.ros.dtype == np.float32
     assert np.all(prop.ros == 0)
 
     assert prop.fireline_int.shape == shape + (prop.realizations,)
-    assert prop.fireline_int.dtype == np.float16
+    assert prop.fireline_int.dtype == np.float32
     assert np.all(prop.fireline_int == 0)
 
     assert isinstance(prop.scheduler, Scheduler)
@@ -188,7 +190,15 @@ def test_propagation_probability_deterministic(sample_propagator, monkeypatch):
     prop.p_moist_fn = MagicMock(return_value=np.array([0.8]))
 
     p = prop.propagation_probability(
-        dem_from, dem_to, veg_from, veg_to, angle_to, dist_to, moist, w_dir, w_speed
+        dem_from,
+        dem_to,
+        veg_from,
+        veg_to,
+        angle_to,
+        dist_to,
+        moist,
+        w_dir,
+        w_speed,
     )
     # p_veg = 0.3 (table[1,0]) => 1 - (1 - 0.3) ** 1.5 = 0.4143 ; times 0.8 => 0.3314
     assert np.isclose(p, 0.3314, atol=1e-4)
@@ -265,18 +275,26 @@ def test_apply_actions_and_decay_and_get_moisture(sample_propagator):
     # Apply moisture addition
     add_m = np.array([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 0.0]])
     prop.apply_actions(
-        Actions(time=prop.time, additional_moisture=add_m, vegetation_changes=None)
+        Actions(
+            time=prop.time, additional_moisture=add_m, vegetation_changes=None
+        )
     )
     assert np.all(prop.actions_moisture == add_m)
 
     # Apply vegetation change (NaN means no change)
     veg_changes = np.array(
-        [[np.nan, 0.0, np.nan], [0.0, np.nan, np.nan], [np.nan, np.nan, np.nan]]
+        [
+            [np.nan, 0.0, np.nan],
+            [0.0, np.nan, np.nan],
+            [np.nan, np.nan, np.nan],
+        ]
     )
     prev = prop.veg.copy()
     prop.apply_actions(
         Actions(
-            time=prop.time, additional_moisture=None, vegetation_changes=veg_changes
+            time=prop.time,
+            additional_moisture=None,
+            vegetation_changes=veg_changes,
         )
     )
     expected = prev.copy()
@@ -297,7 +315,9 @@ def test_apply_actions_and_decay_and_get_moisture(sample_propagator):
     with pytest.raises(ValueError):
         prop.apply_actions(
             Actions(
-                time=prop.time - 1, additional_moisture=None, vegetation_changes=None
+                time=prop.time - 1,
+                additional_moisture=None,
+                vegetation_changes=None,
             )
         )
 
@@ -393,7 +413,9 @@ def test_get_output(sample_propagator, monkeypatch):
     assert isinstance(out, PropagatorOutput)
     assert out.time == 3
     if out.fire_probability is not None:
-        assert np.allclose(out.fire_probability, prop.compute_fire_probability())
+        assert np.allclose(
+            out.fire_probability, prop.compute_fire_probability()
+        )
     if out.ros_mean is not None:
         assert np.allclose(out.ros_mean, prop.compute_ros_mean())
     if out.ros_max is not None:

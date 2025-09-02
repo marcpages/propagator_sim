@@ -7,7 +7,7 @@ from typing import List, Literal, Optional, Mapping, Dict, Tuple
 from warnings import warn
 import yaml
 import numpy as np
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ---- project utils ----------------------------------------------------------
 from propagator.functions import (
@@ -17,16 +17,21 @@ from propagator.functions import (
     get_p_time_fn,
 )
 from propagator.propagator import BoundaryConditions
-from propagator.models import Fuel, FuelSystem
+from propagator.models import FuelSystem, fuelsystem_from_dict
 from propagator.constants import FUEL_SYSTEM_LEGACY
 from propagator_io.boundary_conditions import TimedInput
 from propagator_io.geo import GeographicInfo
-from propagator_io.geometry import DEFAULT_EPSG_GEOMETRY, Geometry, GeometryParser
+from propagator_io.geometry import (
+    DEFAULT_EPSG_GEOMETRY,
+    Geometry,
+    GeometryParser,
+)
 
 
 # ---- configuration ----------------------------------------------------------
 class PropagatorConfigurationLegacy(BaseModel):
     """Propagator configuration"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     fuel_config: Optional[Path] = Field(
         None, description="Path to fuel configuration file (YAML)"
@@ -59,12 +64,15 @@ class PropagatorConfigurationLegacy(BaseModel):
     )
     realizations: int = Field(1, ge=1, description="Number of realizations")
     init_date: datetime = Field(
-        default_factory=datetime.now, description="Datetime of the simulated event"
+        default_factory=datetime.now,
+        description="Datetime of the simulated event",
     )
     time_resolution: int = Field(
         60, gt=0, description="Simulation resolution [minutes]"
     )
-    time_limit: int = Field(1440, gt=0, description="Simulation limit [minutes]")
+    time_limit: int = Field(
+        1440, gt=0, description="Simulation limit [minutes]"
+    )
     epsg: int = Field(
         DEFAULT_EPSG_GEOMETRY,  # default to WGS84
         description="EPSG of geometries",
@@ -76,7 +84,9 @@ class PropagatorConfigurationLegacy(BaseModel):
         default_factory=list, description="List of boundary conditions"
     )
     do_spotting: bool = Field(False, description="Spotting option")
-    ros_model: ROS_model_literal = Field("default", description="ROS model name")
+    ros_model: ROS_model_literal = Field(
+        "default", description="ROS model name"
+    )
     prob_moist_model: Moisture_model_literal = Field(
         "default", description="Moisture model name"
     )
@@ -150,14 +160,17 @@ class PropagatorConfigurationLegacy(BaseModel):
         # 2) top-level ignitions (strings -> Geometry w/ epsg)
         if "ignitions" in data:
             data["ignitions"] = GeometryParser.parse_geometry_list(
-                data["ignitions"], allowed={"point", "line", "polygon"}, epsg=epsg
+                data["ignitions"],
+                allowed={"point", "line", "polygon"},
+                epsg=epsg,
             )
 
         # 3) nested ignitions inside boundary_conditions[*]
         bcs = data.get("boundary_conditions")
         if isinstance(bcs, list):
             data["boundary_conditions"] = [
-                TimedInput.model_validate(bc, context={"epsg": epsg}) for bc in bcs
+                TimedInput.model_validate(bc, context={"epsg": epsg})
+                for bc in bcs
             ]
         return data
 
@@ -196,9 +209,13 @@ class PropagatorConfigurationLegacy(BaseModel):
             raise ValueError("boundary_conditions must not be empty.")
 
         # check if time == 0 is present
-        t0_bc = next((bc for bc in self.boundary_conditions if bc.time == 0), None)
+        t0_bc = next(
+            (bc for bc in self.boundary_conditions if bc.time == 0), None
+        )
         if t0_bc is None:
-            raise ValueError("boundary_conditions must include an entry with time = 0.")
+            raise ValueError(
+                "boundary_conditions must include an entry with time = 0."
+            )
 
         # add initial ignitions (if present) to the firt boundary condition
         if self.ignitions:
@@ -234,7 +251,8 @@ class PropagatorConfigurationLegacy(BaseModel):
 
     def get_ignitions_middle_point(self) -> Optional[Tuple[float, float]]:
         middle_points = [
-            bc.extract_ignitions_middle_point() for bc in self.boundary_conditions
+            bc.extract_ignitions_middle_point()
+            for bc in self.boundary_conditions
         ]
         middle_points = [mp for mp in middle_points if mp is not None]
         if not middle_points:
@@ -252,15 +270,5 @@ def fuels_from_yaml(path: str | Path) -> FuelSystem:
     if not isinstance(fuels_node, Mapping):
         raise ValueError("YAML must contain 'fuels' (mapping)")
     # coerce IDs to int and build Fuel objects
-    fuels: Dict[int, Fuel] = {}
-    for k, v in fuels_node.items():
-        try:
-            fid = int(k)
-        except Exception as e:
-            raise ValueError(f"fuel ID '{k}' is not an integer") from e
-        if not isinstance(v, Mapping):
-            raise ValueError(f"fuel entry for ID {fid} must be a mapping")
-        fuels[fid] = Fuel(**dict(v))
-    # build the FuelSystem
-    fs = FuelSystem(fuels=fuels)
+    fs = fuelsystem_from_dict(fuels_node)  # type: ignore
     return fs

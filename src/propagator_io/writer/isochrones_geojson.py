@@ -73,7 +73,9 @@ def extract_isochrone(
 
     for t in thresholds:
         over_t_ = (filt_values >= t).astype("uint8")
-        over_t = binary_dilation(binary_erosion(over_t_).astype("uint8")).astype(  # type: ignore #binary_erosion has None typing in library
+        over_t = binary_dilation(
+            binary_erosion(over_t_).astype("uint8")
+        ).astype(  # type: ignore #binary_erosion has None typing in library
             "uint8"
         )
         if np.any(over_t):
@@ -152,7 +154,9 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
             crs=self.dst_prj.to_proj4(),
             columns=["geometry", "date"],
             geometry="geometry",
-            index=pd.MultiIndex.from_arrays([[], []], names=["threshold", "time"]),
+            index=pd.MultiIndex.from_arrays(
+                [[], []], names=["threshold", "time"]
+            ),
         )
 
     def write_isochrones(self, output: PropagatorOutput) -> None:
@@ -192,7 +196,8 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
                                 "date": ref_date.isoformat(),
                             },
                             index=pd.MultiIndex.from_tuples(
-                                [(threshold, output.time)], names=["threshold", "time"]
+                                [(threshold, output.time)],
+                                names=["threshold", "time"],
                             ),
                         ),
                     ]

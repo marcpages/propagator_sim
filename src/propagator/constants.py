@@ -6,8 +6,9 @@ moisture effects, as well as fire-spotting and intensity parameters.
 
 import numpy as np
 from numpy import pi, array
-from propagator.models import FuelSystem, Fuel
+from propagator.models import Fuel, fuelsystem_from_dict
 
+TICK_PRECISION = 10
 CELLSIZE = 20
 
 D1 = 0.5
@@ -17,12 +18,27 @@ D4 = 2.0
 D5 = 50.0
 A = 1 - ((D1 * (D2 * np.tanh((0 / D3) - D4))) + (0 / D5))
 
-NEIGHBOURS = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-NEIGHBOURS_ARRAY = array(NEIGHBOURS)
-NEIGHBOURS_DISTANCE = array([[1.414, 1, 1.414], [1, 0, 1], [1.414, 1, 1.414]])
-NEIGHBOURS_ANGLE = array(
-    [[pi * 3 / 4, pi / 2, pi / 4], [pi, np.nan, 0], [-pi * 3 / 4, -pi / 2, -pi / 4]]
-)
+NEIGHBOURS = np.array([
+    (-1, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, -1),
+    (0, 1),
+    (1, -1),
+    (1, 0),
+    (1, 1),
+])
+NEIGHBOURS_DISTANCE = np.array([1.414, 1, 1.414, 1, 1, 1.414, 1, 1.414])
+NEIGHBOURS_ANGLE = np.array([
+    pi * 3 / 4,
+    pi / 2,
+    pi / 4,
+    pi,
+    0,
+    -pi * 3 / 4,
+    -pi / 2,
+    -pi / 4,
+])
 
 
 # aggiunte per spotting
@@ -106,10 +122,36 @@ NEIGHBOURS_AT3_DISTANCE = array(
 )
 NEIGHBOURS_AT3_ANGLE = array(
     [
-        [pi * 3 / 4, pi * 7 / 10, pi * 3 / 5, pi / 2, pi * 2 / 5, pi * 3 / 10, pi / 4],
-        [pi * 4 / 5, pi * 3 / 4, pi * 13 / 20, pi / 2, pi * 7 / 20, pi / 4, pi / 5],
-        [pi * 9 / 10, pi * 17 / 20, pi * 3 / 4, pi / 2, pi / 4, pi * 3 / 20, pi / 10],
-        [pi, pi, pi, np.nan, 0, 0, 0],
+        [
+            pi * 3 / 4,
+            pi * 7 / 10,
+            pi * 3 / 5,
+            pi / 2,
+            pi * 2 / 5,
+            pi * 3 / 10,
+            pi / 4,
+        ],
+        [
+            pi * 4 / 5,
+            pi * 3 / 4,
+            pi * 13 / 20,
+            pi / 2,
+            pi * 7 / 20,
+            pi / 4,
+            pi / 5,
+        ],
+        [
+            pi * 9 / 10,
+            pi * 17 / 20,
+            pi * 3 / 4,
+            pi / 2,
+            pi / 4,
+            pi * 3 / 20,
+            pi / 10,
+        ],
+        [
+            pi, pi, pi, np.nan, 0, 0, 0
+        ],
         [
             -pi * 9 / 10,
             -pi * 17 / 20,
@@ -150,7 +192,7 @@ WANG_BETA1 = 0.1783
 WANG_BETA2 = 3.533
 WANG_BETA3 = 1.2
 
-####costanti per moisture
+# costanti per moisture
 # probabilità
 M1 = -3.5995
 M2 = 5.2389
@@ -159,12 +201,14 @@ M4 = 1.019
 # RoS
 C_MOIST = -0.014
 
-# The following constants are used in the Fire-Spotting model. Alexandridis et al. (2009,2011)
+# The following constants are used in the Fire-Spotting model.
+# Alexandridis et al. (2009,2011)
 
 LAMBDA_SPOTTING = 2.0
 SPOTTING_RN_MEAN = 100
 SPOTTING_RN_STD = 25
-# P_c = P_c0 (1 + P_cd), where P_c0 constant spread_probability of ignition by spotting and P_cd is a correction factor that
+# P_c = P_c0 (1 + P_cd), where P_c0 constant spread_probability of
+# ignition by spotting and P_cd is a correction factor that
 # depends on vegetation type and density...
 P_C0 = 0.6
 
@@ -173,9 +217,10 @@ Q = 2442.0
 
 
 # --- FUEL SYSTEM LEGACY ---
-FUEL_SYSTEM_LEGACY = FuelSystem(
-    fuels={
-        1: Fuel(
+NO_FUEL = 0
+FUEL_SYSTEM_LEGACY = fuelsystem_from_dict(
+    {
+        1: dict(
             name="broadleaves",
             v0=140,
             d0=1.5,
@@ -192,7 +237,7 @@ FUEL_SYSTEM_LEGACY = FuelSystem(
                 7: 0.075,
             },
         ),
-        2: Fuel(
+        2: dict(
             name="shrubs",
             v0=140,
             d0=1,
@@ -209,7 +254,7 @@ FUEL_SYSTEM_LEGACY = FuelSystem(
                 7: 0.1,
             },
         ),
-        3: Fuel(
+        3: dict(
             name="non-vegetated",
             v0=20,
             d0=0.1,
@@ -227,7 +272,7 @@ FUEL_SYSTEM_LEGACY = FuelSystem(
             },
             burn=False,
         ),
-        4: Fuel(
+        4: dict(
             name="grassland",
             v0=120,
             d0=0.5,
@@ -244,7 +289,7 @@ FUEL_SYSTEM_LEGACY = FuelSystem(
                 7: 0.075,
             },
         ),
-        5: Fuel(
+        5: dict(
             name="conifers",
             v0=200,
             d0=1,
@@ -263,7 +308,7 @@ FUEL_SYSTEM_LEGACY = FuelSystem(
             spotting=True,
             prob_ign_by_embers=0.4,
         ),
-        6: Fuel(
+        6: dict(
             name="agro-forestry areas",
             v0=120,
             d0=0.5,
@@ -280,7 +325,7 @@ FUEL_SYSTEM_LEGACY = FuelSystem(
                 7: 0.075,
             },
         ),
-        7: Fuel(
+        7: dict(
             name="non-fire prone forests",
             v0=60,
             d0=1,

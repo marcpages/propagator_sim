@@ -5,40 +5,45 @@ modulators for wind/slope/moisture, fire spotting distance, and fireline
 intensity utilities used by the core propagator.
 """
 
-from typing import Optional, Literal
-from unittest import case
+from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
+from numba import jit
 
-from propagator.constants import (
-    C_MOIST,
-    CELLSIZE,
-    D1,
-    D2,
-    D3,
-    D4,
-    D5,
-    FIRE_SPOTTING_DISTANCE_COEFFICIENT,
-    M1,
-    M2,
-    M3,
-    M4,
-    ROTHERMEL_ALPHA1,
-    ROTHERMEL_ALPHA2,
-    SPOTTING_RN_MEAN,
-    SPOTTING_RN_STD,
-    WANG_BETA1,
-    WANG_BETA2,
-    WANG_BETA3,
-    A,
-    Q,
-)
-from propagator.models import PMoistFn, PTimeFn
-from propagator.utils import normalize
+from propagator.constants import (C_MOIST, CELLSIZE, D1, D2, D3, D4, D5,
+                                  FIRE_SPOTTING_DISTANCE_COEFFICIENT, M1, M2,
+                                  M3, M4, NEIGHBOURS, NEIGHBOURS_ANGLE,
+                                  NEIGHBOURS_DISTANCE, NO_FUEL,
+                                  ROTHERMEL_ALPHA1, ROTHERMEL_ALPHA2,
+                                  SPOTTING_RN_MEAN, SPOTTING_RN_STD,
+                                  TICK_PRECISION, WANG_BETA1, WANG_BETA2,
+                                  WANG_BETA3, A, Q)
+from propagator.models import FuelSystem, Ignitions, PMoistFn, PTimeFn
 
 type ROS_model_literal = Literal["default", "wang", "rothermel"]
-type Moisture_model_literal = Literal["default", "new_formulation", "rothermel"]
+type Moisture_model_literal = Literal[
+    "default", "new_formulation", "rothermel"
+]
+
+
+from random import random
+
+
+@jit
+def clip(x: float, min: float, max: float) -> float:
+    """Clip x to the range [min, max]."""
+    if x < min:
+        return min
+    if x > max:
+        return max
+    return x
+
+
+@jit
+def normalize(angle_to_norm: float) -> float:
+    """Normalize an angle to the interval [-pi, pi)."""
+    return (angle_to_norm + np.pi) % (2 * np.pi) - np.pi  # type: ignore[return-value]
 
 
 def load_parameters(
@@ -93,14 +98,14 @@ def get_p_moist_fn(moist_model_code: Moisture_model_literal) -> PMoistFn:
 
 def p_time_rothermel(
     v0: npt.NDArray[np.integer],
-    dem_from: npt.NDArray[np.floating],
-    dem_to: npt.NDArray[np.floating],
-    angle_to: npt.NDArray[np.floating],
-    dist: npt.NDArray[np.floating],
-    moist: npt.NDArray[np.floating],
-    w_dir: npt.NDArray[np.floating],
-    w_speed: npt.NDArray[np.floating],
-) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
+    dem_from: float,
+    dem_to: float,
+    angle_to: float,
+    dist: float,
+    moist: float,
+    w_dir: float,
+    w_speed: float,
+) -> tuple[float, float]:
     """Propagation time and ROS according to Rothermel-like scaling.
 
     Parameters
@@ -136,39 +141,42 @@ def p_time_rothermel(
     teta_s_rad = np.arctan(dh / CELLSIZE * dist)  # slope angle [rad]
     teta_s = np.degrees(teta_s_rad)  # slope angle [°]
 
-    # flame angle measured from the vertical in the direction of fire spread [rad]
+    # flame angle measured from the vertical
+    # in the direction of fire spread [rad]
     teta_f_rad = np.arctan(0.4226 * w_spd)
     teta_f = np.degrees(teta_f_rad)  # flame angle [°]
 
     sf = np.exp(ROTHERMEL_ALPHA1 * teta_s)  # slope factor
-    sf_clip = np.clip(sf, 0.01, 10)  # slope factor clipped at 10
+    sf_clip = clip(sf, 0.01, 10)  # slope factor clipped at 10
     wf = np.exp(ROTHERMEL_ALPHA2 * teta_f)  # wind factor
     wf_rescaled = wf / 13  # wind factor rescaled to have 10 as max value
-    wf_clip = np.clip(wf_rescaled, 1, 20)  # max value is 20, min is 1
+    wf_clip = clip(wf_rescaled, 1, 20)  # max value is 20, min is 1
 
-    v_wh_pre = v0 * sf_clip * wf_clip  # Rate of Spread evaluate with Rothermel's model
+    v_wh_pre = (
+        v0 * sf_clip * wf_clip
+    )  # Rate of Spread evaluate with Rothermel's model
     moist_eff = np.exp(C_MOIST * moist)  # moisture effect
 
-    # v_wh = np.clip(v_wh_pre, 0.01, 100) #adoptable RoS
-    v_wh = np.clip(v_wh_pre * moist_eff, 0.01, 100)  # adoptable RoS [m/min]
+    # v_wh = clip(v_wh_pre, 0.01, 100) #adoptable RoS
+    v_wh = clip(v_wh_pre * moist_eff, 0.01, 100)  # adoptable RoS [m/min]
 
     t = real_dist / v_wh
-    t[t >= 1] = np.around(t[t >= 1])
-    t = np.clip(t, 0.1, np.inf)
+
     return t, v_wh
     # return t
 
 
+@jit
 def p_time_wang(
-    v0: npt.NDArray[np.floating],
-    dem_from: npt.NDArray[np.floating],
-    dem_to: npt.NDArray[np.floating],
-    angle_to: npt.NDArray[np.floating],
-    dist: npt.NDArray[np.floating],
-    moist: npt.NDArray[np.floating],
-    w_dir: npt.NDArray[np.floating],
-    w_speed: npt.NDArray[np.floating],
-) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
+    v0: float,
+    dem_from: float,
+    dem_to: float,
+    angle_to: float,
+    dist: float,
+    moist: float,
+    w_dir: float,
+    w_speed: float,
+) -> tuple[float, float]:
     """Propagation time and ROS according to Wang et al.
 
     Parameters
@@ -209,36 +217,34 @@ def p_time_wang(
     p_reverse = np.sign(dh)
 
     wf = np.exp(WANG_BETA1 * w_spd)  # wind factor
-    wf_clip = np.clip(wf, 0.01, 10)  # clipped at 10
+    wf_clip = clip(wf, 0.01, 10)  # clipped at 10
     sf = np.exp(
         p_reverse * WANG_BETA2 * np.tan(teta_s_pos) ** WANG_BETA3
     )  # slope factor
-    sf_clip = np.clip(sf, 0.01, 10)
+    sf_clip = clip(sf, 0.01, 10)
 
     # Rate of Spread evaluate with Wang Zhengfei's model
     v_wh_pre = v0 * wf_clip * sf_clip
     moist_eff = np.exp(C_MOIST * moist)  # moisture effect
 
-    # v_wh = np.clip(v_wh_pre, 0.01, 100) #adoptable RoS
-    v_wh = np.clip(v_wh_pre * moist_eff, 0.01, 100)  # adoptable RoS [m/min]
+    # v_wh = clip(v_wh_pre, 0.01, 100) #adoptable RoS
+    v_wh = clip(v_wh_pre * moist_eff, 0.01, 100)  # adoptable RoS [m/min]
 
     t = real_dist / v_wh
 
-    t[t >= 1] = np.around(t[t >= 1])
-    t = np.clip(t, 0.1, np.inf)
     return t, v_wh
 
 
 def p_time_standard(
-    v0: npt.NDArray[np.floating],
-    dem_from: npt.NDArray[np.floating],
-    dem_to: npt.NDArray[np.floating],
-    angle_to: npt.NDArray[np.floating],
-    dist: npt.NDArray[np.floating],
-    moist: npt.NDArray[np.floating],
-    w_dir: npt.NDArray[np.floating],
-    w_speed: npt.NDArray[np.floating],
-) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
+    v0: float,
+    dem_from: float,
+    dem_to: float,
+    angle_to: float,
+    dist: float,
+    moist: float,
+    w_dir: float,
+    w_speed: float,
+) -> tuple[float, float]:
     """Baseline propagation time and ROS with combined wind-slope factor.
 
     Parameters
@@ -267,22 +273,21 @@ def p_time_standard(
     wh = w_h_effect(angle_to, w_speed, w_dir, dh, dist)
     moist_eff = np.exp(C_MOIST * moist)  # moisture effect
 
-    v_wh = np.clip(v0 * wh * moist_eff, 0.01, 100)
+    v_wh = clip(v0 * wh * moist_eff, 0.01, 100)
 
     real_dist = np.sqrt((CELLSIZE * dist) ** 2 + dh**2)
     t = real_dist / v_wh
-    t[t >= 1] = np.around(t[t >= 1])
-    t = np.clip(t, 0.1, np.inf)
     return t, v_wh
 
 
+@jit
 def w_h_effect(
-    angle_to: npt.NDArray[np.floating],
-    w_speed: npt.NDArray[np.floating],
-    w_dir: npt.NDArray[np.floating],
-    dh: npt.NDArray[np.floating],
-    dist: npt.NDArray[np.floating],
-) -> npt.NDArray[np.floating]:
+    angle_to: float,
+    w_speed: float,
+    w_dir: float,
+    dh: float,
+    dist: float,
+) -> float:
     """Combined wind and slope multiplicative factor on ROS.
 
     Returns
@@ -290,7 +295,9 @@ def w_h_effect(
     numpy.ndarray
         Dimensionless multiplier applied to base ROS.
     """
-    w_effect_module = A + (D1 * (D2 * np.tanh((w_speed / D3) - D4))) + (w_speed / D5)
+    w_effect_module = (
+        A + (D1 * (D2 * np.tanh((w_speed / D3) - D4))) + (w_speed / D5)
+    )
     a = (w_effect_module - 1) / 4
     w_effect_on_direction = (
         (a + 1) * (1 - a**2) / (1 - a * np.cos(normalize(w_dir - angle_to)))
@@ -302,13 +309,14 @@ def w_h_effect(
     return w_h
 
 
+@jit
 def w_h_effect_on_probability(
-    angle_to: npt.NDArray[np.floating],
-    w_speed: npt.NDArray[np.floating],
-    w_dir: npt.NDArray[np.floating],
-    dh: npt.NDArray[np.floating],
-    dist_to: npt.NDArray[np.floating],
-) -> npt.NDArray[np.floating]:
+    angle_to: float,
+    w_speed: float,
+    w_dir: float,
+    dh: float,
+    dist_to: float,
+) -> float:
     """Scale the wind/slope factor for use as probability exponent.
 
     Returns
@@ -317,18 +325,21 @@ def w_h_effect_on_probability(
         Positive factor used as an exponent on the vegetation probability term;
         values > 1 increase spread, < 1 decrease it.
     """
-    w_speed_norm = np.clip(w_speed, 0, 60)
+    w_speed_norm = clip(w_speed, 0, 60)
     wh_orig = w_h_effect(angle_to, w_speed_norm, w_dir, dh, dist_to)
     wh = wh_orig - 1.0
-    wh[wh > 0] = wh[wh > 0] / 2.13
-    wh[wh < 0] = wh[wh < 0] / 1.12
+    if wh > 0:
+        wh = wh / 2.13
+    elif wh < 0:
+        wh = wh / 1.12
     wh += 1.0
     return wh
 
 
+@jit
 def moist_proba_correction_1(
-    moist: npt.NDArray[np.floating],
-) -> npt.NDArray[np.floating]:
+    moist: float,
+) -> float:
     """
     Moisture correction to the transition probability p_{i,j}.
 
@@ -336,7 +347,7 @@ def moist_proba_correction_1(
     (Trucchia et al., Fire 2020).
     """
     Mx = 0.3
-    x = np.clip(moist, 0.0, 1.0) / Mx
+    x = clip(moist, 0.0, 1.0) / Mx
     p_moist = (
         (-11.507 * x**5)
         + (22.963 * x**4)
@@ -345,15 +356,16 @@ def moist_proba_correction_1(
         + (-1.7211 * x)
         + 1.0003
     )
-    p_moist = np.clip(p_moist, 0.0, 1.0)
+    p_moist = clip(p_moist, 0.0, 1.0)
     return p_moist
 
 
 def moist_proba_correction_2(
-    moist: npt.NDArray[np.floating],
-) -> npt.NDArray[np.floating]:
+    moist: float,
+) -> float:
     """
-    Moisture correction to p_{i,j} (older formulation, Baghino; Trucchia et al., 2020).
+    Moisture correction to p_{i,j}
+    (older formulation, Baghino; Trucchia et al., 2020).
     Parameters come from constants.
     """
     p_moist = M1 * moist**3 + M2 * moist**2 + M3 * moist + M4
@@ -368,82 +380,208 @@ def fire_spotting(
     """Evaluate spotting distance using Alexandridis' formulation."""
     r_n = np.random.normal(
         SPOTTING_RN_MEAN, SPOTTING_RN_STD, size=angle_to.shape
-    )  # main thrust of the ember: sampled from a Gaussian Distribution (Alexandridis et al, 2008 and 2011)
+    )  # main thrust of the ember: sampled from a
+    # Gaussian Distribution (Alexandridis et al, 2008 and 2011)
     w_speed_ms = w_speed / 3.6  # wind speed [m/s]
     # Alexandridis' formulation for spotting distance
     d_p = r_n * np.exp(
-        w_speed_ms * FIRE_SPOTTING_DISTANCE_COEFFICIENT * (np.cos(w_dir - angle_to) - 1)
+        w_speed_ms
+        * FIRE_SPOTTING_DISTANCE_COEFFICIENT
+        * (np.cos(w_dir - angle_to) - 1)
     )
     return d_p
 
 
 # functions useful for evaluating the fire line intensity
 
-
+@jit
 def lhv_dead_fuel(
-    hhv: npt.NDArray[np.floating],
-    dffm: npt.NDArray[np.floating],
-) -> npt.NDArray[np.floating]:
-    """Lower heating value of dead fuels given higher heating value and FFMC."""
+    hhv: float,
+    dffm: float,
+) -> float:
+    """Lower heating value of dead fuels given higher
+    heating value and FFMC."""
     lhv = hhv * (1.0 - (dffm / 100.0)) - Q * (dffm / 100.0)
     return lhv
 
 
+@jit
 def lhv_canopy(
-    hhv: npt.NDArray[np.floating],
-    hum: npt.NDArray[np.floating],
-) -> npt.NDArray[np.floating]:
+    hhv: float,
+    hum: float,
+) -> float:
     """Lower heating value of canopy fuels given humidity (percent)."""
     lhv = hhv * (1.0 - (hum / 100.0)) - Q * (hum / 100.0)
-    lhv[np.isnan(lhv)] = 0
+    if np.isnan(lhv):
+        lhv = 0
     return lhv
 
 
+@jit
 def fireline_intensity(
-    d0: npt.NDArray[np.floating],
-    d1: npt.NDArray[np.floating],
-    ros: npt.NDArray[np.floating],
-    lhv_dead_fuel: npt.NDArray[np.floating],
-    lhv_canopy: npt.NDArray[np.floating],
-    rg: npt.NDArray[np.floating] | None = None,
-) -> npt.NDArray[np.floating]:
+    d0: float,
+    d1: float,
+    ros: float,
+    lhv_dead_fuel: float,
+    lhv_canopy: float,
+    rg: float | None = None,
+) -> float:
     """Estimate fireline intensity (kW/m) from fuel loads and ROS.
 
     Supports an optional `rg` fraction to blend surface/canopy contributions.
     """
-    intensity = np.full(ros.shape[0], np.nan, dtype="float32")
-    if rg is not None:
-        rg_idx = ~np.isnan(rg)
-        d1_idx = (not np.isclose(d1, 0.0, rtol=1e-09, atol=1e-09)) & rg_idx
-        d0_idx = (np.isclose(d1, 0.0, rtol=1e-09, atol=1e-09)) & rg_idx
-        intensity[d0_idx] = (
-            ros[d0_idx]
-            * ((lhv_dead_fuel[d0_idx] * d0[d0_idx] * (1.0 - rg[d0_idx])) / 2)
-            / 60.0
-        )
-        intensity[d1_idx] = (
-            ros[d1_idx]
-            * (
-                (
-                    lhv_dead_fuel[d1_idx] * d0[d1_idx]
-                    + lhv_canopy[d1_idx] * (d1[d1_idx] * (1 - rg[d1_idx]))
-                )
-                / 2
-            )
-            / 60.0
-        )
-        intensity[~rg_idx] = (
-            ros[~rg_idx]
-            * (
-                (
-                    lhv_dead_fuel[~rg_idx] * d0[~rg_idx]
-                    + lhv_canopy[~rg_idx] * d1[~rg_idx]
-                )
-                / 2
-            )
-            / 60.0
-        )
-    else:
-        # divided by 60 instead of 3600 because RoS is required in m/s and it is given in m/min (so it has to be divided by 60)
-        intensity = ros * (lhv_dead_fuel * d0 + lhv_canopy * d1) / 60.0
+    # if rg is not None:
+    #     rg_idx = ~np.isnan(rg)
+    #     d1_idx = (not np.isclose(d1, 0.0, rtol=1e-09, atol=1e-09)) & rg_idx
+    #     d0_idx = (np.isclose(d1, 0.0, rtol=1e-09, atol=1e-09)) & rg_idx
+    #     intensity[d0_idx] = (
+    #         ros[d0_idx]
+    #         * ((lhv_dead_fuel[d0_idx] * d0[d0_idx] * (1.0 - rg[d0_idx])) / 2)
+    #         / 60.0
+    #     )
+    #     intensity[d1_idx] = (
+    #         ros[d1_idx]
+    #         * (
+    #             (
+    #                 lhv_dead_fuel[d1_idx] * d0[d1_idx]
+    #                 + lhv_canopy[d1_idx] * (d1[d1_idx] * (1 - rg[d1_idx]))
+    #             )
+    #             / 2
+    #         )
+    #         / 60.0
+    #     )
+    #     intensity[~rg_idx] = (
+    #         ros[~rg_idx]
+    #         * (
+    #             (
+    #                 lhv_dead_fuel[~rg_idx] * d0[~rg_idx]
+    #                 + lhv_canopy[~rg_idx] * d1[~rg_idx]
+    #             )
+    #             / 2
+    #         )
+    #         / 60.0
+    #     )
+    # else:
+    # divided by 60 instead of 3600 because RoS is required in m/s and
+    # it is given in m/min (so it has to be divided by 60)
+    intensity = ros * (lhv_dead_fuel * d0 + lhv_canopy * d1) / 60.0
     return intensity
+
+
+@jit(parallel=True, nopython=True, fastmath=True)
+def apply_updates_fn(
+    update_array: npt.NDArray[np.integer],
+    time: int,
+    veg: npt.NDArray[np.integer],
+    dem: npt.NDArray[np.floating],
+    fire: npt.NDArray[np.int8],
+    ros: npt.NDArray[np.float32],
+    fireline_int: npt.NDArray[np.float32],
+    moisture: npt.NDArray[np.floating],
+    wind_dir: npt.NDArray[np.floating],
+    wind_speed: npt.NDArray[np.floating],
+    fuels: FuelSystem,
+) -> list[npt.NDArray[np.integer]]:
+    new_updates = []
+    for update in update_array:
+        rows_from: int = update[0]
+        cols_from: int = update[1]
+        realization: int = update[2]
+        veg_type = veg[rows_from, cols_from]
+        if (veg_type == NO_FUEL) or (
+            fire[rows_from, cols_from, realization] == 1
+        ):
+            continue
+        fire[rows_from, cols_from, realization] = 1  # set state
+        for neighbour, dist_to, angle_to in zip(
+            NEIGHBOURS, NEIGHBOURS_DISTANCE, NEIGHBOURS_ANGLE
+        ):
+            rows_to = rows_from + neighbour[0]
+            cols_to = cols_from + neighbour[1]
+            w_dir_r = wind_dir[rows_from, cols_from] + (
+                np.pi / 16
+            ) * (0.5 - random())
+            w_speed_r = wind_speed[rows_from, cols_from] * (
+                1.2 - 0.4 * random()
+            )
+            moisture_r = moisture[rows_to, cols_to]
+            dem_from = dem[rows_from, cols_from]
+            veg_from = veg[rows_from, cols_from]
+            veg_to = veg[rows_to, cols_to]
+            dem_to = dem[rows_to, cols_to]
+            # keep only pixels where fire can spread
+            if (
+                fire[rows_to, cols_to, realization] != 0
+                or veg_to == NO_FUEL
+            ):
+                continue
+            # get the probability for all the pixels
+            transition_probability = fuels.get_transition_probability(
+                veg_from, veg_to)
+            moisture_effect = moist_proba_correction_1(moisture_r)
+            dh = dem_to - dem_from
+            alpha_wh = w_h_effect_on_probability(
+                angle_to, w_speed_r, w_dir_r, dh, dist_to
+            )
+            alpha_wh = np.maximum(alpha_wh, 0)  # prevent alpha < 0
+            p_prob = 1 - (1 - transition_probability) ** alpha_wh
+            p_prob = clip(p_prob * moisture_effect, 0, 1.0)
+            # try the propagation
+            do_propagate = p_prob > random()
+            if not do_propagate:
+                continue
+            # get the propagation time for the propagating pixels
+            # transition_time = p_time(dem_from[p], dem_to[p],
+            fuel_from = fuels.get_fuel(veg_from)  # type: ignore
+            transition_time, ros_value = p_time_wang(
+                fuel_from.v0 / 60,  # m/min!!!
+                dem_from,
+                dem_to,
+                angle_to,
+                dist_to,
+                moisture_r,
+                w_dir_r,
+                w_speed_r,
+            )
+            transition_time = int(transition_time)
+            if transition_time < 1:
+                transition_time = 1
+                
+            fuel_to = fuels.get_fuel(veg_to)  # type: ignore
+            # evaluate LHV of dead fuel
+            lhv_dead_fuel_value = lhv_dead_fuel(fuel_to.hhv, moisture_r)
+            # evaluate LHV of the canopy
+            lhv_canopy_value = lhv_canopy(fuel_to.hhv, fuel_to.humidity)
+            # evaluate fireline intensity
+            fireline_intensity_value = fireline_intensity(
+                fuel_to.d0,
+                fuel_to.d1,
+                ros_value,
+                lhv_dead_fuel_value,
+                lhv_canopy_value,
+            )
+            fireline_int[rows_to, cols_to, realization] = (
+                fireline_intensity_value
+            )
+            ros[rows_to, cols_to, realization] = ros_value
+            # if do_spotting:
+            #     nr_spot, nc_spot, nt_spot, transition_time_spot =
+            # compute_spotting(
+            #         veg_type, update
+            #     )
+            #     # row-coordinates of the "spotted cells"
+            # added to the other ones
+            #     rows_to = np.append(rows_to, nr_spot)
+            #     # column-coordinates of the "spotted cells"
+            # added to the other ones
+            #     cols_to = np.append(cols_to, nc_spot)
+            #     # time propagation of "spotted cells"
+            # added to the other ones
+            #     nt = np.append(nt, nt_spot)
+            #     transition_time = np.append(transition_time,
+            # transition_time_spot)
+            new_time = time + transition_time
+            # schedule the new updates
+            new_update = np.array([new_time, rows_to, cols_to, realization])
+            new_updates.append(new_update)
+    return new_updates
