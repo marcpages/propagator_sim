@@ -19,10 +19,10 @@ from numba.typed import Dict
 
 # Integer coords array of shape (n, 3). We can’t encode the shape statically
 # with stdlib typing, but we DO lock the dtype to integer families.
-CoordsArray = npt.NDArray[np.integer]
+CoordsTuple = tuple[int, int, int]
 
 # The payload shape we pass around
-UpdateBatch = List[CoordsArray]
+UpdateBatch = List[CoordsTuple]
 
 RNG = np.random.default_rng(12345)
 
@@ -54,7 +54,7 @@ spec = [
 # name: str
 
 
-@jitclass(spec)  # type: ignore
+@jitclass(spec)
 class Fuel:
     def __init__(
         self,
@@ -221,7 +221,7 @@ def fuelsystem_from_dict(fuels: dict[int, dict]) -> FuelSystem:
 @dataclass(frozen=True)
 class Ignitions:
     time: int
-    coords: CoordsArray
+    coords: CoordsTuple
 
 
 @dataclass(frozen=True)

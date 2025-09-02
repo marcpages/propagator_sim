@@ -12,7 +12,7 @@ from typing import Dict, Iterator, List, Optional, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from propagator.models import BoundaryConditions, CoordsArray, Ignitions
+from propagator.models import BoundaryConditions, CoordsTuple, Ignitions
 
 PopResult = Tuple[int, "SchedulerEvent"]
 
@@ -21,7 +21,7 @@ PopResult = Tuple[int, "SchedulerEvent"]
 class SchedulerEvent:
     """Represents a scheduled event in the simulation."""
 
-    coords: List[CoordsArray] = field(default_factory=list)
+    coords: List[CoordsTuple] = field(default_factory=list)
 
     # boundary_conditions
     moisture: Optional[npt.NDArray[np.floating]] = None
@@ -102,17 +102,16 @@ class Scheduler:
 
     # --- Basic queue ops -----------------------------------------------------
 
-    def push_ignitions(self, ignitions: Ignitions) -> None:
+    def push_ignition(self, time: int, coords: CoordsTuple) -> None:
         event: SchedulerEvent | None
-        if ignitions.time in self._queue:
-            event = self._queue.get(ignitions.time, None)
+        if time in self._queue:
+            event = self._queue.get(time)
         else:
             event = SchedulerEvent()
-            self._queue[ignitions.time] = event
+            self._queue[time] = event
         if event is None:
             raise ValueError("SchedulerEvent should not be None here")
-
-        event.coords.append(ignitions.coords)
+        event.coords.append(coords)
 
     def pop(self) -> PopResult:
         if not self:

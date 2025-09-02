@@ -30,7 +30,7 @@ type Moisture_model_literal = Literal[
 from random import random
 
 
-@jit
+@jit(cache=True)
 def clip(x: float, min: float, max: float) -> float:
     """Clip x to the range [min, max]."""
     if x < min:
@@ -40,7 +40,7 @@ def clip(x: float, min: float, max: float) -> float:
     return x
 
 
-@jit
+@jit(cache=True)
 def normalize(angle_to_norm: float) -> float:
     """Normalize an angle to the interval [-pi, pi)."""
     return (angle_to_norm + np.pi) % (2 * np.pi) - np.pi  # type: ignore[return-value]
@@ -166,7 +166,7 @@ def p_time_rothermel(
     # return t
 
 
-@jit
+@jit(cache=True)
 def p_time_wang(
     v0: float,
     dem_from: float,
@@ -280,7 +280,7 @@ def p_time_standard(
     return t, v_wh
 
 
-@jit
+@jit(cache=True)
 def w_h_effect(
     angle_to: float,
     w_speed: float,
@@ -309,7 +309,7 @@ def w_h_effect(
     return w_h
 
 
-@jit
+@jit(cache=True)
 def w_h_effect_on_probability(
     angle_to: float,
     w_speed: float,
@@ -336,7 +336,7 @@ def w_h_effect_on_probability(
     return wh
 
 
-@jit
+@jit(cache=True)
 def moist_proba_correction_1(
     moist: float,
 ) -> float:
@@ -394,7 +394,7 @@ def fire_spotting(
 
 # functions useful for evaluating the fire line intensity
 
-@jit
+@jit(cache=True)
 def lhv_dead_fuel(
     hhv: float,
     dffm: float,
@@ -405,7 +405,7 @@ def lhv_dead_fuel(
     return lhv
 
 
-@jit
+@jit(cache=True)
 def lhv_canopy(
     hhv: float,
     hum: float,
@@ -417,7 +417,7 @@ def lhv_canopy(
     return lhv
 
 
-@jit
+@jit(cache=True)
 def fireline_intensity(
     d0: float,
     d1: float,
@@ -468,9 +468,9 @@ def fireline_intensity(
     return intensity
 
 
-@jit(parallel=True, nopython=True, fastmath=True)
+@jit(cache=True, fastmath=True)
 def apply_updates_fn(
-    update_array: npt.NDArray[np.integer],
+    update_array: list[npt.NDArray[np.integer]],
     time: int,
     veg: npt.NDArray[np.integer],
     dem: npt.NDArray[np.floating],

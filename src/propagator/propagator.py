@@ -74,6 +74,7 @@ class Propagator:
     wind_dir: npt.NDArray[np.floating] = field(init=False)
     wind_speed: npt.NDArray[np.floating] = field(init=False)
     actions_moisture: npt.NDArray[np.floating] | None = field(
+        default=None,
         init=False
     )  # additional moisture due to fighting actions
     # (ideally it should decay over time)
@@ -88,7 +89,6 @@ class Propagator:
         self.fireline_int = np.zeros(
             shape + (self.realizations,), dtype=np.float32
         )
-        self.actions_moisture = np.zeros(shape, dtype=np.float32)
 
     def set_ignitions(self, ignitions: Ignitions) -> None:
         """
@@ -331,9 +331,9 @@ class Propagator:
         """
         moisture = self.get_moisture()
         # coordinates of the next updates
-        update_array: npt.NDArray[np.integer] = np.vstack(updates)
+        # update_array: npt.NDArray[np.integer] = np.vstack(updates)
         new_updates_arrays = apply_updates_fn(
-            update_array,
+            updates,
             self.time,
             self.veg,
             self.dem,
