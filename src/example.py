@@ -38,11 +38,11 @@ for boundary_condition in boundary_conditions_list:
     simulator.set_boundary_conditions(boundary_condition)
 
 
-while simulator.time < 3600:
+while simulator.time < 600:
     next_time = simulator.next_time()
     if next_time is None:
         break
 
     simulator.step()
-    if simulator.time % 600 == 0:
+    if simulator.time % 60 == 0:
         print(f"Time: {simulator.time}")

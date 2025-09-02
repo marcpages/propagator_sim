@@ -12,7 +12,7 @@ from typing import Dict, Iterator, List, Optional, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from propagator.models import BoundaryConditions, CoordsTuple, Ignitions
+from propagator.models import BoundaryConditions, CoordsTuple
 
 PopResult = Tuple[int, "SchedulerEvent"]
 
@@ -95,6 +95,7 @@ class Scheduler:
     Generic over the time key type (int or float), so your inputs and outputs
     stay consistent.
     """
+
     realizations: int
     _queue: SortedDict = field(
         default_factory=SortedDict, init=False, repr=False
@@ -142,16 +143,12 @@ class Scheduler:
         if boundary_conditions.ignition_mask is not None:
             ign_arr = boundary_conditions.ignition_mask
             points = np.argwhere(ign_arr > 0)
-            realizations = np.arange(self.realizations)
-
-            # Repeat each row of points for every replication value
-            points_expanded = np.repeat(points, self.realizations, axis=0)
-            # Tile the replication values to align
-            realizations_expanded = np.tile(realizations, len(points))[:, None]
-            # Concatenate along last axis
-            coords = np.hstack([points_expanded, realizations_expanded])
-            ignitions = Ignitions(time=boundary_conditions.time, coords=coords)
-            self.push_ignitions(ignitions)
+            for point in points:
+                for realization in range(self.realizations):
+                    coords = (point[0], point[1], realization)
+                    self.push_ignition(
+                        time=boundary_conditions.time, coords=coords
+                    )
 
         if boundary_conditions.additional_moisture is not None:
             if entry.additional_moisture is None:
@@ -181,7 +178,9 @@ class Scheduler:
             a for batches in self._queue.values() for a in batches.coords
         ]
         if len(arrays) == 1:
-            return np.unique(arrays[0][:, 2])
+            the_coords = arrays[0]
+            return np.array([the_coords[2]])
+
         stacked = np.vstack(arrays)
         return np.unique(stacked[:, 2])
 

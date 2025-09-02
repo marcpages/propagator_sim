@@ -5,29 +5,52 @@ modulators for wind/slope/moisture, fire spotting distance, and fireline
 intensity utilities used by the core propagator.
 """
 
+from random import random
 from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
 from numba import jit
 
-from propagator.constants import (C_MOIST, CELLSIZE, D1, D2, D3, D4, D5,
-                                  FIRE_SPOTTING_DISTANCE_COEFFICIENT, M1, M2,
-                                  M3, M4, NEIGHBOURS, NEIGHBOURS_ANGLE,
-                                  NEIGHBOURS_DISTANCE, NO_FUEL,
-                                  ROTHERMEL_ALPHA1, ROTHERMEL_ALPHA2,
-                                  SPOTTING_RN_MEAN, SPOTTING_RN_STD,
-                                  TICK_PRECISION, WANG_BETA1, WANG_BETA2,
-                                  WANG_BETA3, A, Q)
-from propagator.models import FuelSystem, Ignitions, PMoistFn, PTimeFn
+from propagator.constants import (
+    C_MOIST,
+    CELLSIZE,
+    D1,
+    D2,
+    D3,
+    D4,
+    D5,
+    FIRE_SPOTTING_DISTANCE_COEFFICIENT,
+    M1,
+    M2,
+    M3,
+    M4,
+    NEIGHBOURS,
+    NEIGHBOURS_ANGLE,
+    NEIGHBOURS_DISTANCE,
+    NO_FUEL,
+    ROTHERMEL_ALPHA1,
+    ROTHERMEL_ALPHA2,
+    SPOTTING_RN_MEAN,
+    SPOTTING_RN_STD,
+    WANG_BETA1,
+    WANG_BETA2,
+    WANG_BETA3,
+    A,
+    Q,
+)
+from propagator.models import (
+    CoordsTuple,
+    FuelSystem,
+    PMoistFn,
+    PTimeFn,
+    TimeCoordsTuple,
+)
 
 type ROS_model_literal = Literal["default", "wang", "rothermel"]
 type Moisture_model_literal = Literal[
     "default", "new_formulation", "rothermel"
 ]
-
-
-from random import random
 
 
 @jit(cache=True)
@@ -394,6 +417,7 @@ def fire_spotting(
 
 # functions useful for evaluating the fire line intensity
 
+
 @jit(cache=True)
 def lhv_dead_fuel(
     hhv: float,
@@ -468,9 +492,9 @@ def fireline_intensity(
     return intensity
 
 
-@jit(cache=True, fastmath=True)
+@jit(cache=True, nopython=True, fastmath=True)
 def apply_updates_fn(
-    update_array: list[npt.NDArray[np.integer]],
+    update_array: list[CoordsTuple],
     time: int,
     veg: npt.NDArray[np.integer],
     dem: npt.NDArray[np.floating],
@@ -481,7 +505,7 @@ def apply_updates_fn(
     wind_dir: npt.NDArray[np.floating],
     wind_speed: npt.NDArray[np.floating],
     fuels: FuelSystem,
-) -> list[npt.NDArray[np.integer]]:
+) -> list[TimeCoordsTuple]:
     new_updates = []
     for update in update_array:
         rows_from: int = update[0]
@@ -498,9 +522,9 @@ def apply_updates_fn(
         ):
             rows_to = rows_from + neighbour[0]
             cols_to = cols_from + neighbour[1]
-            w_dir_r = wind_dir[rows_from, cols_from] + (
-                np.pi / 16
-            ) * (0.5 - random())
+            w_dir_r = wind_dir[rows_from, cols_from] + (np.pi / 16) * (
+                0.5 - random()
+            )
             w_speed_r = wind_speed[rows_from, cols_from] * (
                 1.2 - 0.4 * random()
             )
@@ -510,15 +534,14 @@ def apply_updates_fn(
             veg_to = veg[rows_to, cols_to]
             dem_to = dem[rows_to, cols_to]
             # keep only pixels where fire can spread
-            if (
-                fire[rows_to, cols_to, realization] != 0
-                or veg_to == NO_FUEL
-            ):
+            if fire[rows_to, cols_to, realization] != 0 or veg_to == NO_FUEL:
                 continue
             # get the probability for all the pixels
             transition_probability = fuels.get_transition_probability(
-                veg_from, veg_to)
-            moisture_effect = moist_proba_correction_1(moisture_r)
+                veg_from,
+                veg_to,  # type: ignore
+            )
+            moisture_effect = moist_proba_correction_1(moisture_r)  # type: ignore
             dh = dem_to - dem_from
             alpha_wh = w_h_effect_on_probability(
                 angle_to, w_speed_r, w_dir_r, dh, dist_to
@@ -536,20 +559,20 @@ def apply_updates_fn(
             transition_time, ros_value = p_time_wang(
                 fuel_from.v0 / 60,  # m/min!!!
                 dem_from,
-                dem_to,
+                dem_to,  # type: ignore
                 angle_to,
                 dist_to,
-                moisture_r,
+                moisture_r,  # type: ignore
                 w_dir_r,
                 w_speed_r,
             )
             transition_time = int(transition_time)
             if transition_time < 1:
                 transition_time = 1
-                
+
             fuel_to = fuels.get_fuel(veg_to)  # type: ignore
             # evaluate LHV of dead fuel
-            lhv_dead_fuel_value = lhv_dead_fuel(fuel_to.hhv, moisture_r)
+            lhv_dead_fuel_value = lhv_dead_fuel(fuel_to.hhv, moisture_r)  # type: ignore
             # evaluate LHV of the canopy
             lhv_canopy_value = lhv_canopy(fuel_to.hhv, fuel_to.humidity)
             # evaluate fireline intensity

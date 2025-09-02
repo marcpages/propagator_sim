@@ -10,28 +10,23 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import numpy.typing as npt
-from propagator.constants import (
-    NEIGHBOURS_ANGLE,
-    NEIGHBOURS_DISTANCE,
-    FUEL_SYSTEM_LEGACY,
-    TICK_PRECISION,
-    NO_FUEL,
-    NEIGHBOURS
-)
 
+from propagator.constants import (
+    FUEL_SYSTEM_LEGACY,
+)
 from propagator.functions import (
+    apply_updates_fn,
     get_p_moist_fn,
     get_p_time_fn,
-    apply_updates_fn
 )
 from propagator.models import (
-    FuelSystem,
     BoundaryConditions,
-    Ignitions,
+    FuelSystem,
     PMoistFn,
     PropagatorOutput,
     PropagatorStats,
     PTimeFn,
+    TimeCoordsTuple,
     UpdateBatch,
 )
 from propagator.scheduler import Scheduler
@@ -74,8 +69,7 @@ class Propagator:
     wind_dir: npt.NDArray[np.floating] = field(init=False)
     wind_speed: npt.NDArray[np.floating] = field(init=False)
     actions_moisture: npt.NDArray[np.floating] | None = field(
-        default=None,
-        init=False
+        default=None, init=False
     )  # additional moisture due to fighting actions
     # (ideally it should decay over time)
 
@@ -90,13 +84,13 @@ class Propagator:
             shape + (self.realizations,), dtype=np.float32
         )
 
-    def set_ignitions(self, ignitions: Ignitions) -> None:
-        """
-        Apply ignitions to the state of the simulation.
-        """
-        self.scheduler.push_ignitions(ignitions)
-        for p in ignitions.coords:
-            self.fire[p[0], p[1], p[2]] = 0
+    # def set_ignitions(self, ignitions: Ignitions) -> None:
+    #     """
+    #     Apply ignitions to the state of the simulation.
+    #     """
+    #     self.scheduler.push_ignitions(ignitions)
+    #     for p in ignitions.coords:
+    #         self.fire[p[0], p[1], p[2]] = 0
 
     def compute_fire_probability(self) -> npt.NDArray[np.floating]:
         """Return mean burn probability across realizations for each cell.
@@ -317,7 +311,7 @@ class Propagator:
     def apply_updates(
         self,
         updates: UpdateBatch,
-    ) -> list[Ignitions]:
+    ) -> list[TimeCoordsTuple]:
         """Apply a batch of burning updates and schedule new ones.
         Parameters
         ----------
@@ -343,13 +337,9 @@ class Propagator:
             moisture,
             self.wind_dir,
             self.wind_speed,
-            self.fuels
+            self.fuels,
         )
-        new_ignitions = []
-        for update in new_updates_arrays:
-            ignition = Ignitions(time=update[0], coords=update[1:])
-            new_ignitions.append(ignition)
-        return new_ignitions
+        return new_updates_arrays
 
     def decay_actions_moisture(
         self, time_delta: int, decay_factor: float = 0.01
@@ -415,8 +405,8 @@ class Propagator:
 
         new_updates = self.apply_updates(scheduler_event.coords)
 
-        for new_ignitions in new_updates:
-            self.scheduler.push_ignitions(new_ignitions)
+        for new_ignition in new_updates:
+            self.scheduler.push_ignition(new_ignition[0], new_ignition[1:])
 
     def get_output(self) -> PropagatorOutput:
         """Assemble the current outputs and summary stats into a dataclass.

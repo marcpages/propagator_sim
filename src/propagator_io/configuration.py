@@ -7,7 +7,13 @@ from typing import List, Literal, Optional, Mapping, Dict, Tuple
 from warnings import warn
 import yaml
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 # ---- project utils ----------------------------------------------------------
 from propagator.functions import (
@@ -31,6 +37,7 @@ from propagator_io.geometry import (
 # ---- configuration ----------------------------------------------------------
 class PropagatorConfigurationLegacy(BaseModel):
     """Propagator configuration"""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     fuel_config: Optional[Path] = Field(

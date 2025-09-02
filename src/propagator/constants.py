@@ -18,27 +18,31 @@ D4 = 2.0
 D5 = 50.0
 A = 1 - ((D1 * (D2 * np.tanh((0 / D3) - D4))) + (0 / D5))
 
-NEIGHBOURS = np.array([
-    (-1, -1),
-    (-1, 0),
-    (-1, 1),
-    (0, -1),
-    (0, 1),
-    (1, -1),
-    (1, 0),
-    (1, 1),
-])
+NEIGHBOURS = np.array(
+    [
+        (-1, -1),
+        (-1, 0),
+        (-1, 1),
+        (0, -1),
+        (0, 1),
+        (1, -1),
+        (1, 0),
+        (1, 1),
+    ]
+)
 NEIGHBOURS_DISTANCE = np.array([1.414, 1, 1.414, 1, 1, 1.414, 1, 1.414])
-NEIGHBOURS_ANGLE = np.array([
-    pi * 3 / 4,
-    pi / 2,
-    pi / 4,
-    pi,
-    0,
-    -pi * 3 / 4,
-    -pi / 2,
-    -pi / 4,
-])
+NEIGHBOURS_ANGLE = np.array(
+    [
+        pi * 3 / 4,
+        pi / 2,
+        pi / 4,
+        pi,
+        0,
+        -pi * 3 / 4,
+        -pi / 2,
+        -pi / 4,
+    ]
+)
 
 
 # aggiunte per spotting
@@ -149,9 +153,7 @@ NEIGHBOURS_AT3_ANGLE = array(
             pi * 3 / 20,
             pi / 10,
         ],
-        [
-            pi, pi, pi, np.nan, 0, 0, 0
-        ],
+        [pi, pi, pi, np.nan, 0, 0, 0],
         [
             -pi * 9 / 10,
             -pi * 17 / 20,
