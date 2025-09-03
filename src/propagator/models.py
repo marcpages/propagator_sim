@@ -29,20 +29,37 @@ UpdateBatchTuple = tuple[
     npt.NDArray[np.float32],
 ]
 
+
 @dataclass
 class UpdateBatch:
-    rows: npt.NDArray[np.integer] = field(default_factory=lambda: np.empty((0,), dtype=np.int32))
-    cols: npt.NDArray[np.integer] = field(default_factory=lambda: np.empty((0,), dtype=np.int32))
-    realizations: npt.NDArray[np.integer] = field(default_factory=lambda: np.empty((0,), dtype=np.int32))
-    rates_of_spread: npt.NDArray[np.float32] = field(default_factory=lambda: np.empty((0,), dtype=np.float32))
-    fireline_intensities: npt.NDArray[np.float32] = field(default_factory=lambda: np.empty((0,), dtype=np.float32))
+    rows: npt.NDArray[np.integer] = field(
+        default_factory=lambda: np.empty((0,), dtype=np.int32)
+    )
+    cols: npt.NDArray[np.integer] = field(
+        default_factory=lambda: np.empty((0,), dtype=np.int32)
+    )
+    realizations: npt.NDArray[np.integer] = field(
+        default_factory=lambda: np.empty((0,), dtype=np.int32)
+    )
+    rates_of_spread: npt.NDArray[np.float32] = field(
+        default_factory=lambda: np.empty((0,), dtype=np.float32)
+    )
+    fireline_intensities: npt.NDArray[np.float32] = field(
+        default_factory=lambda: np.empty((0,), dtype=np.float32)
+    )
 
     def extend(self, other: "UpdateBatch") -> None:
         self.rows = np.concatenate([self.rows, other.rows])
         self.cols = np.concatenate([self.cols, other.cols])
-        self.realizations = np.concatenate([self.realizations, other.realizations])
-        self.rates_of_spread = np.concatenate([self.rates_of_spread, other.rates_of_spread])
-        self.fireline_intensities = np.concatenate([self.fireline_intensities, other.fireline_intensities])
+        self.realizations = np.concatenate(
+            [self.realizations, other.realizations]
+        )
+        self.rates_of_spread = np.concatenate(
+            [self.rates_of_spread, other.rates_of_spread]
+        )
+        self.fireline_intensities = np.concatenate(
+            [self.fireline_intensities, other.fireline_intensities]
+        )
 
 
 @dataclass(frozen=True)
@@ -56,7 +73,14 @@ class UpdateBatchWithTime:
 
     @staticmethod
     def from_tuple(data: UpdateBatchTuple) -> "UpdateBatchWithTime":
-        times, rows, cols, realizations, rates_of_spread, fireline_intensities = data
+        (
+            times,
+            rows,
+            cols,
+            realizations,
+            rates_of_spread,
+            fireline_intensities,
+        ) = data
         return UpdateBatchWithTime(
             times=times,
             rows=rows,
@@ -89,7 +113,6 @@ class UpdateBatchWithTime:
         return result
 
 
-
 class PropagatorError(Exception):
     """Domain-specific error raised by PROPAGATOR."""
 
@@ -105,6 +128,7 @@ spec = [
     ("burn", types.boolean),
     ("name", types.string),
 ]
+
 
 @jitclass(spec)  # type: ignore
 class Fuel:

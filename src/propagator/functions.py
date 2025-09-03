@@ -10,7 +10,7 @@ from typing import Literal
 import numpy as np
 import numpy.typing as npt
 from numba import jit
-from numpy.random import random, poisson, uniform, normal
+from numpy.random import normal, poisson, random, uniform
 
 from propagator.constants import (
     C_MOIST,
@@ -21,6 +21,7 @@ from propagator.constants import (
     D4,
     D5,
     FIRE_SPOTTING_DISTANCE_COEFFICIENT,
+    LAMBDA_SPOTTING,
     M1,
     M2,
     M3,
@@ -29,6 +30,7 @@ from propagator.constants import (
     NEIGHBOURS_ANGLE,
     NEIGHBOURS_DISTANCE,
     NO_FUEL,
+    P_C0,
     ROTHERMEL_ALPHA1,
     ROTHERMEL_ALPHA2,
     SPOTTING_RN_MEAN,
@@ -38,8 +40,6 @@ from propagator.constants import (
     WANG_BETA3,
     A,
     Q,
-    LAMBDA_SPOTTING,
-    P_C0
 )
 from propagator.models import (
     Fuel,
@@ -558,23 +558,6 @@ def calculate_fire_behavior(
     return transition_time, ros_value, fireline_intensity_value
 
 
-# if do_spotting:
-#     nr_spot, nc_spot, nt_spot, transition_time_spot =
-# compute_spotting(
-#         veg_type, update
-#     )
-#     # row-coordinates of the "spotted cells"
-# added to the other ones
-#     rows_to = np.append(rows_to, nr_spot)
-#     # column-coordinates of the "spotted cells"
-# added to the other ones
-#     cols_to = np.append(cols_to, nc_spot)
-#     # time propagation of "spotted cells"
-# added to the other ones
-#     nt = np.append(nt, nt_spot)
-#     transition_time = np.append(transition_time,
-# transition_time_spot)
-
 # schedule the new updates
 @jit(cache=True, nopython=True, fastmath=True)
 def compute_spotting(
@@ -605,6 +588,7 @@ def compute_spotting(
             wind_dir,
             wind_speed,
         )
+
         # filter out short embers
         if ember_distance < 2 * CELLSIZE:
             continue
@@ -616,13 +600,13 @@ def compute_spotting(
         delta_c = ember_distance * np.sin(ember_angle)
 
         # location of the cell to be ignited by the ember
-        row_to = row + int(delta_r/ CELLSIZE)
-        col_to = col + int(delta_c/ CELLSIZE)
-    
+        row_to = row + int(delta_r / CELLSIZE)
+        col_to = col + int(delta_c / CELLSIZE)
+
         # check if the landing location is within the grid, otherwise discard
         if col_to < 0 or col_to > fire.shape[1] - 1:
             continue
-        
+
         if row_to < 0 or row_to > fire.shape[0] - 1:
             continue
 
@@ -631,8 +615,7 @@ def compute_spotting(
             continue
         veg_to = veg[row_to, col_to]
         if veg_to == NO_FUEL:
-                    continue
-
+            continue
 
         # we want to put another probabilistic filter in order
         # to assess the success of ember ignition.
@@ -640,7 +623,7 @@ def compute_spotting(
         # P_c = P_c0 (1 + P_cd), where P_c0 constant probability of ignition
         # by spotting and P_cd is a correction factor that
         # depends on vegetation type and density > set on the fuels system
-        fuel_to = fuels.get_fuel(veg_to) # type: ignore
+        fuel_to = fuels.get_fuel(veg_to)  # type: ignore
 
         P_c = P_C0 * (1 + fuel_to.prob_ign_by_embers)
         if uniform() > P_c:

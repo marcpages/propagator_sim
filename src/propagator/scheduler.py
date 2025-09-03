@@ -193,9 +193,7 @@ class Scheduler:
                 )
 
     def active(self) -> npt.NDArray[np.integer]:
-        arrays = [
-            event.updates.realizations for event in self._queue.values()
-        ]
+        arrays = [event.updates.realizations for event in self._queue.values()]
         stacked = np.concatenate(arrays)
         return np.unique(stacked)
 

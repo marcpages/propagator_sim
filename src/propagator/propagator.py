@@ -209,7 +209,9 @@ class Propagator:
         """
         moisture = self.get_moisture()
 
-        must_be_updated = self.fire[updates.rows, updates.cols, updates.realizations] == 0
+        must_be_updated = (
+            self.fire[updates.rows, updates.cols, updates.realizations] == 0
+        )
         rows = updates.rows[must_be_updated]
         cols = updates.cols[must_be_updated]
         realizations = updates.realizations[must_be_updated]
