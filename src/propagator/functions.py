@@ -10,7 +10,7 @@ from typing import Literal
 import numpy as np
 import numpy.typing as npt
 from numba import jit
-from numpy.random import random
+from numpy.random import random, poisson, uniform, normal
 
 from propagator.constants import (
     C_MOIST,
@@ -38,6 +38,8 @@ from propagator.constants import (
     WANG_BETA3,
     A,
     Q,
+    LAMBDA_SPOTTING,
+    P_C0
 )
 from propagator.models import (
     Fuel,
@@ -393,14 +395,15 @@ def moist_proba_correction_2(
     return p_moist
 
 
+@jit(cache=True)
 def fire_spotting(
-    angle_to: npt.NDArray[np.floating],
-    w_dir: npt.NDArray[np.floating],
-    w_speed: npt.NDArray[np.floating],
-) -> npt.NDArray[np.floating]:
+    angle_to: float,
+    w_dir: float,
+    w_speed: float,
+) -> float:
     """Evaluate spotting distance using Alexandridis' formulation."""
-    r_n = np.random.normal(
-        SPOTTING_RN_MEAN, SPOTTING_RN_STD, size=angle_to.shape
+    r_n = normal(
+        SPOTTING_RN_MEAN, SPOTTING_RN_STD
     )  # main thrust of the ember: sampled from a
     # Gaussian Distribution (Alexandridis et al, 2008 and 2011)
     w_speed_ms = w_speed / 3.6  # wind speed [m/s]
@@ -573,6 +576,83 @@ def calculate_fire_behavior(
 # transition_time_spot)
 
 # schedule the new updates
+@jit(cache=True, nopython=True, fastmath=True)
+def compute_spotting(
+    row: int,
+    col: int,
+    veg: npt.NDArray[np.integer],
+    fire: npt.NDArray[np.int8],
+    wind_dir: float,
+    wind_speed: float,
+    fuels: FuelSystem,
+) -> list[tuple[int, int, int, float, float]]:
+    # calculate number of embers per emitter > Poisson distribution
+    spotting_updates = []
+
+    num_embers = poisson(LAMBDA_SPOTTING)
+
+    if num_embers == 0:
+        return spotting_updates
+
+    for _ in range(num_embers):
+        # calculate angle > uniform distribution
+        ember_angle = uniform(0, 2.0 * np.pi)
+        # calculate distance > depends on wind speed and direction
+        # NOTE: it is computed considering wind speed and direction
+        # of the cell of origin of the ember
+        ember_distance = fire_spotting(
+            ember_angle,
+            wind_dir,
+            wind_speed,
+        )
+        # filter out short embers
+        if ember_distance < 2 * CELLSIZE:
+            continue
+
+        # calculate landing locations
+        # vertical delta [meters]
+        delta_r = ember_distance * np.cos(ember_angle)
+        # horizontal delta [meters]
+        delta_c = ember_distance * np.sin(ember_angle)
+
+        # location of the cell to be ignited by the ember
+        row_to = row + int(delta_r/ CELLSIZE)
+        col_to = col + int(delta_c/ CELLSIZE)
+    
+        # check if the landing location is within the grid, otherwise discard
+        if col_to < 0 or col_to > fire.shape[1] - 1:
+            continue
+        
+        if row_to < 0 or row_to > fire.shape[0] - 1:
+            continue
+
+        # prevent ignition of already burning cells
+        if fire[row_to, col_to] != 0:
+            continue
+        veg_to = veg[row_to, col_to]
+        if veg_to == NO_FUEL:
+                    continue
+
+
+        # we want to put another probabilistic filter in order
+        # to assess the success of ember ignition.
+        # Formula (10) of Alexandridis et al IJWLF 2011
+        # P_c = P_c0 (1 + P_cd), where P_c0 constant probability of ignition
+        # by spotting and P_cd is a correction factor that
+        # depends on vegetation type and density > set on the fuels system
+        fuel_to = fuels.get_fuel(veg_to) # type: ignore
+
+        P_c = P_C0 * (1 + fuel_to.prob_ign_by_embers)
+        if uniform() > P_c:
+            continue
+
+        transition_time = int(ember_distance / wind_speed)
+        transition_time = max(transition_time, 1)
+
+        spotting_update = (transition_time, row_to, col_to, np.nan, np.nan)
+        spotting_updates.append(spotting_update)
+
+    return spotting_updates
 
 
 @jit(cache=True, parallel=False, nopython=True, fastmath=True)
@@ -591,8 +671,14 @@ def apply_single_update(
 
     dem_from = dem[row, col]
     veg_from = veg[row, col]
+
+    if veg_from == NO_FUEL:
+        return fire_spread_updates
+
     w_dir_r = wind_dir[row, col]
     w_speed_r = wind_speed[row, col]
+
+    fuel_from = fuels.get_fuel(veg_from)  # type: ignore
 
     for neighbour, dist_to, angle_to in zip(
         NEIGHBOURS, NEIGHBOURS_DISTANCE, NEIGHBOURS_ANGLE
@@ -626,7 +712,6 @@ def apply_single_update(
         if not do_propagate:
             continue
 
-        fuel_from = fuels.get_fuel(veg_from)  # type: ignore
         fuel_to = fuels.get_fuel(veg_to)  # type: ignore
 
         transition_time, ros, fireline_intensity = calculate_fire_behavior(
@@ -642,6 +727,19 @@ def apply_single_update(
         fire_spread_updates.append(
             (transition_time, row_to, col_to, ros, fireline_intensity)
         )
+
+    if fuel_from.spotting:
+        spotting_updates = compute_spotting(
+            row,
+            col,
+            veg,
+            fire,
+            wind_dir[row, col],
+            wind_speed[row, col],
+            fuels,
+        )
+        fire_spread_updates.extend(spotting_updates)
+
     return fire_spread_updates
 
 
