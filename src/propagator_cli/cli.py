@@ -12,12 +12,12 @@ from propagator.propagator import Propagator
 from propagator_cli.console import info_msg, ok_msg, setup_console
 from propagator_io.configuration import PropagatorConfigurationLegacy
 from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
-from propagator_io.loader.tiles import PropagatorDataFromTiles
 from propagator_io.loader.protocol import PropagatorInputDataProtocol
+from propagator_io.loader.tiles import PropagatorDataFromTiles
 from propagator_io.writer import (
     GeoTiffWriter,
-    MetadataJSONWriter,
     IsochronesGeoJSONWriter,
+    MetadataJSONWriter,
 )
 from propagator_io.writer.protocol import OutputWriter
 
@@ -222,11 +222,10 @@ def main():
             break
 
         simulator.step()
-        ref_date = cfg.init_date + timedelta(minutes=int(simulator.time))
-
-        info_msg(f"Time: {simulator.time} -> {ref_date}")
 
         if simulator.time % cfg.time_resolution == 0:
+            ref_date = cfg.init_date + timedelta(minutes=int(simulator.time))
+            info_msg(f"Time: {simulator.time} -> {ref_date}")
             output = simulator.get_output()
             # Save the output to the specified folder
             writer.write_output(output)
