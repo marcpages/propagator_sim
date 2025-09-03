@@ -26,8 +26,8 @@ from propagator.models import (
     PropagatorOutput,
     PropagatorStats,
     PTimeFn,
-    TimeCoordsTuple,
     UpdateBatch,
+    UpdateBatchWithTime,
 )
 from propagator.scheduler import Scheduler
 
@@ -311,7 +311,7 @@ class Propagator:
     def apply_updates(
         self,
         updates: UpdateBatch,
-    ) -> list[TimeCoordsTuple]:
+    ) -> UpdateBatchWithTime:
         """Apply a batch of burning updates and schedule new ones.
         Parameters
         ----------
@@ -325,20 +325,22 @@ class Propagator:
         """
         moisture = self.get_moisture()
         # coordinates of the next updates
-        # update_array: npt.NDArray[np.integer] = np.vstack(updates)
+        rows, cols, realizations, ross, firelines = updates
+
         new_updates_arrays = apply_updates_fn(
-            updates,
+            rows,
+            cols,
+            realizations,
             self.time,
             self.veg,
             self.dem,
             self.fire,
-            self.ros,
-            self.fireline_int,
             moisture,
             self.wind_dir,
             self.wind_speed,
             self.fuels,
         )
+
         return new_updates_arrays
 
     def decay_actions_moisture(
@@ -403,10 +405,16 @@ class Propagator:
             mask = ~np.isnan(scheduler_event.vegetation_changes)
             self.veg[mask] = scheduler_event.vegetation_changes[mask]
 
-        new_updates = self.apply_updates(scheduler_event.coords)
+        if scheduler_event.updates is not None:
+            new_updates = self.apply_updates(scheduler_event.updates)
+            rows, cols, realizations, ros, fireline_intensity = (
+                scheduler_event.updates
+            )
+            self.fire[rows, cols, realizations] = 1
+            self.ros[rows, cols, realizations] = ros
+            self.fireline_int[rows, cols, realizations] = fireline_intensity
 
-        for new_ignition in new_updates:
-            self.scheduler.push_ignition(new_ignition[0], new_ignition[1:])
+            self.scheduler.push_updates(new_updates)
 
     def get_output(self) -> PropagatorOutput:
         """Assemble the current outputs and summary stats into a dataclass.

@@ -1,3 +1,5 @@
+from time import time
+
 import numpy as np
 
 from propagator.constants import FUEL_SYSTEM_LEGACY
@@ -37,12 +39,19 @@ boundary_conditions_list: list[BoundaryConditions] = [
 for boundary_condition in boundary_conditions_list:
     simulator.set_boundary_conditions(boundary_condition)
 
-
-while simulator.time < 600:
+start_time = time()
+while simulator.time < 3600:
     next_time = simulator.next_time()
     if next_time is None:
         break
 
+    step_time_init = time()
     simulator.step()
+    step_time_end = time()
     if simulator.time % 60 == 0:
-        print(f"Time: {simulator.time}")
+        print(
+            f"Time: {simulator.time} | elapsed: {step_time_end - step_time_init} seconds"
+        )
+
+end_time = time()
+print(f"Simulation completed in {end_time - start_time} seconds.")

@@ -12,7 +12,11 @@ from typing import Dict, Iterator, List, Optional, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from propagator.models import BoundaryConditions, CoordsTuple
+from propagator.models import (
+    BoundaryConditions,
+    UpdateBatch,
+    UpdateBatchWithTime,
+)
 
 PopResult = Tuple[int, "SchedulerEvent"]
 
@@ -21,7 +25,7 @@ PopResult = Tuple[int, "SchedulerEvent"]
 class SchedulerEvent:
     """Represents a scheduled event in the simulation."""
 
-    coords: List[CoordsTuple] = field(default_factory=list)
+    updates: Optional[UpdateBatch] = None
 
     # boundary_conditions
     moisture: Optional[npt.NDArray[np.floating]] = None
@@ -103,16 +107,48 @@ class Scheduler:
 
     # --- Basic queue ops -----------------------------------------------------
 
-    def push_ignition(self, time: int, coords: CoordsTuple) -> None:
+    def push_updates(self, updates: UpdateBatchWithTime) -> None:
         event: SchedulerEvent | None
-        if time in self._queue:
-            event = self._queue.get(time)
-        else:
-            event = SchedulerEvent()
-            self._queue[time] = event
-        if event is None:
-            raise ValueError("SchedulerEvent should not be None here")
-        event.coords.append(coords)
+        times, rows, cols, realizations, ros, fireline_intensity = updates
+
+        for time in np.unique(times):
+            index = times == time
+
+            cols_at_time = cols[index]
+            rows_at_time = rows[index]
+            realizations_at_time = realizations[index]
+            ros_at_time = ros[index]
+            fireline_intensity_at_time = fireline_intensity[index]
+
+            if time in self._queue:
+                event = self._queue.get(time)
+            else:
+                event = SchedulerEvent()
+                self._queue[time] = event
+
+            if event is None:
+                raise ValueError("SchedulerEvent should not be None here")
+
+            if event.updates is None:
+                update_at_time: UpdateBatch = (
+                    rows_at_time,
+                    cols_at_time,
+                    realizations_at_time,
+                    ros_at_time,
+                    fireline_intensity_at_time,
+                )
+                event.updates = update_at_time
+            else:
+                previous_update = event.updates
+                event.updates = (
+                    np.concatenate([previous_update[0], rows_at_time]),
+                    np.concatenate([previous_update[1], cols_at_time]),
+                    np.concatenate([previous_update[2], realizations_at_time]),
+                    np.concatenate([previous_update[3], ros_at_time]),
+                    np.concatenate(
+                        [previous_update[4], fireline_intensity_at_time]
+                    ),
+                )
 
     def pop(self) -> PopResult:
         if not self:
@@ -143,12 +179,25 @@ class Scheduler:
         if boundary_conditions.ignition_mask is not None:
             ign_arr = boundary_conditions.ignition_mask
             points = np.argwhere(ign_arr > 0)
-            for point in points:
-                for realization in range(self.realizations):
-                    coords = (point[0], point[1], realization)
-                    self.push_ignition(
-                        time=boundary_conditions.time, coords=coords
-                    )
+            realizations = np.arange(self.realizations)
+            points_repeated = np.repeat(points, self.realizations, axis=0)
+            times_repeated = np.repeat(
+                boundary_conditions.time, self.realizations
+            )
+            fireline_intensity = np.zeros_like(
+                points_repeated[:, 0], dtype=np.float32
+            )
+            ros = np.zeros_like(points_repeated[:, 0], dtype=np.float32)
+            self.push_updates(
+                (
+                    times_repeated,
+                    points_repeated[:, 0],
+                    points_repeated[:, 1],
+                    realizations,
+                    fireline_intensity,
+                    ros,
+                )
+            )
 
         if boundary_conditions.additional_moisture is not None:
             if entry.additional_moisture is None:
@@ -172,17 +221,18 @@ class Scheduler:
                 )
 
     def active(self) -> npt.NDArray[np.integer]:
-        if not self:
-            return np.array([], dtype=int)
-        arrays = [
-            a for batches in self._queue.values() for a in batches.coords
-        ]
-        if len(arrays) == 1:
-            the_coords = arrays[0]
-            return np.array([the_coords[2]])
+        # if not self:
+        #     return np.array([], dtype=int)
+        # arrays = [
+        #     a for batches in self._queue.values() for a in batches.updates
+        # ]
+        # if len(arrays) == 1:
+        #     the_coords = arrays[0]
+        #     return np.array([the_coords[2]])
 
-        stacked = np.vstack(arrays)
-        return np.unique(stacked[:, 2])
+        # stacked = np.vstack(arrays)
+        # return np.unique(stacked[:, 2])
+        ...
 
     def __len__(self) -> int:
         return len(self._queue)

@@ -6,24 +6,37 @@ moisture inputs. Public dataclasses capture boundary conditions, actions,
 summary statistics, and output snapshots suitable for CLI and IO layers.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional, Protocol, Any
+from typing import Optional, Protocol
 
 import numpy as np
 import numpy.typing as npt
-from numba.experimental import jitclass
 from numba import types
+from numba.experimental import jitclass
 from numba.typed import Dict
-
 
 # Integer coords array of shape (n, 3). We can’t encode the shape statically
 # with stdlib typing, but we DO lock the dtype to integer families.
-CoordsTuple = tuple[int, int, int]
-TimeCoordsTuple = tuple[int, int, int, int]
+FireBehaviourUpdate = tuple[int, int, int, float, float]
 
-# The payload shape we pass around
-UpdateBatch = List[CoordsTuple]
+UpdateBatch = tuple[
+    npt.NDArray[np.integer],
+    npt.NDArray[np.integer],
+    npt.NDArray[np.integer],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+]
+
+UpdateBatchWithTime = tuple[
+    npt.NDArray[np.integer],
+    npt.NDArray[np.integer],
+    npt.NDArray[np.integer],
+    npt.NDArray[np.integer],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.float32],
+]
+
 
 RNG = np.random.default_rng(12345)
 
@@ -43,19 +56,8 @@ spec = [
     ("burn", types.boolean),
     ("name", types.string),
 ]
-# v0: float
-# d0: float
-# d1: float
-# hhv: float
-# humidity: float
-# spread_probability: Dict
-# spotting: bool
-# prob_ign_by_embers: float
-# burn: bool
-# name: str
 
-
-@jitclass(spec)
+@jitclass(spec)  # type: ignore
 class Fuel:
     def __init__(
         self,
@@ -87,9 +89,6 @@ spec = [
     ("d1", types.float64[:]),
     ("hhv", types.float64[:]),
     ("humidity", types.float64[:]),
-    # ("spread_probability", types.DictType(
-    #     types.int64, types.float64[:]
-    # )),
     ("spread_probability", types.float64[:, :]),
     ("spotting", types.boolean[:]),
     ("prob_ign_by_embers", types.float64[:]),
@@ -99,7 +98,7 @@ spec = [
 ]
 
 
-@jitclass(spec)
+@jitclass(spec)  # type: ignore
 class FuelSystem:
     def __init__(self, n_fuels: int):
         self.fuels_id = Dict.empty(
@@ -212,12 +211,6 @@ def fuelsystem_from_dict(fuels: dict[int, dict]) -> FuelSystem:
         for to_id, prob in fuel["spread_probability"].items():
             fuelsystem.add_transition_probability(from_id, to_id, prob)
     return fuelsystem
-
-
-@dataclass(frozen=True)
-class Ignitions:
-    time: int
-    coords: CoordsTuple
 
 
 @dataclass(frozen=True)

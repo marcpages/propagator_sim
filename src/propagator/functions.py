@@ -40,11 +40,11 @@ from propagator.constants import (
     Q,
 )
 from propagator.models import (
-    CoordsTuple,
+    Fuel,
     FuelSystem,
     PMoistFn,
     PTimeFn,
-    TimeCoordsTuple,
+    UpdateBatchWithTime,
 )
 
 type ROS_model_literal = Literal["default", "wang", "rothermel"]
@@ -192,8 +192,7 @@ def p_time_rothermel(
 @jit(cache=True)
 def p_time_wang(
     v0: float,
-    dem_from: float,
-    dem_to: float,
+    dh: float,
     angle_to: float,
     dist: float,
     moist: float,
@@ -225,7 +224,6 @@ def p_time_wang(
         (transition time [min], ROS [m/min]).
     """
     # velocità di base modulata con la densità(tempo di attraversamento)
-    dh = dem_to - dem_from
 
     real_dist = np.sqrt((CELLSIZE * dist) ** 2 + dh**2)
 
@@ -493,118 +491,218 @@ def fireline_intensity(
 
 
 @jit(cache=True, nopython=True, fastmath=True)
-def apply_updates_fn(
-    update_array: list[CoordsTuple],
-    time: int,
+def get_probability_to_neighbour(
+    angle_to: float,
+    dist_to: float,
+    w_dir_r: float,
+    w_speed_r: float,
+    moisture_r: float,
+    dh: float,
+    transition_probability: float,
+) -> float:
+    # get the probability for all the pixels
+    moisture_effect = moist_proba_correction_1(moisture_r)  # type: ignore
+    alpha_wh = w_h_effect_on_probability(
+        angle_to, w_speed_r, w_dir_r, dh, dist_to
+    )
+
+    alpha_wh = np.maximum(alpha_wh, 0)  # prevent alpha < 0
+    p_prob = 1 - (1 - transition_probability) ** alpha_wh
+    p_prob = clip(p_prob * moisture_effect, 0, 1.0)
+    # try the propagation
+    return p_prob
+
+
+@jit(cache=True, nopython=True, fastmath=True)
+def calculate_fire_behavior(
+    fuel_from: Fuel,
+    fuel_to: Fuel,
+    dh: float,
+    dist_to: float,
+    angle_to: float,
+    moisture_r: float,
+    w_dir_r: float,
+    w_speed_r: float,
+) -> tuple[int, float, float]:
+    # get the propagation time for the propagating pixels
+    # transition_time = p_time(dem_from[p], dem_to[p],
+
+    transition_time, ros_value = p_time_wang(
+        fuel_from.v0 / 60,  # m/min!!!
+        dh,
+        angle_to,
+        dist_to,
+        moisture_r,  # type: ignore
+        w_dir_r,
+        w_speed_r,
+    )
+    transition_time = int(transition_time)
+    if transition_time < 1:
+        transition_time = 1
+
+    # evaluate LHV of dead fuel
+    lhv_dead_fuel_value = lhv_dead_fuel(fuel_to.hhv, moisture_r)  # type: ignore
+    # evaluate LHV of the canopy
+    lhv_canopy_value = lhv_canopy(fuel_to.hhv, fuel_to.humidity)
+    # evaluate fireline intensity
+    fireline_intensity_value = fireline_intensity(
+        fuel_to.d0,
+        fuel_to.d1,
+        ros_value,
+        lhv_dead_fuel_value,
+        lhv_canopy_value,
+    )
+    return transition_time, ros_value, fireline_intensity_value
+
+
+# if do_spotting:
+#     nr_spot, nc_spot, nt_spot, transition_time_spot =
+# compute_spotting(
+#         veg_type, update
+#     )
+#     # row-coordinates of the "spotted cells"
+# added to the other ones
+#     rows_to = np.append(rows_to, nr_spot)
+#     # column-coordinates of the "spotted cells"
+# added to the other ones
+#     cols_to = np.append(cols_to, nc_spot)
+#     # time propagation of "spotted cells"
+# added to the other ones
+#     nt = np.append(nt, nt_spot)
+#     transition_time = np.append(transition_time,
+# transition_time_spot)
+
+# schedule the new updates
+
+
+@jit(cache=True, parallel=True, nopython=True, fastmath=True)
+def apply_single_update(
+    row: int,
+    col: int,
     veg: npt.NDArray[np.integer],
     dem: npt.NDArray[np.floating],
     fire: npt.NDArray[np.int8],
-    ros: npt.NDArray[np.float32],
-    fireline_int: npt.NDArray[np.float32],
     moisture: npt.NDArray[np.floating],
     wind_dir: npt.NDArray[np.floating],
     wind_speed: npt.NDArray[np.floating],
     fuels: FuelSystem,
-) -> list[TimeCoordsTuple]:
-    new_updates = []
-    for update in update_array:
-        rows_from: int = update[0]
-        cols_from: int = update[1]
-        realization: int = update[2]
-        veg_type = veg[rows_from, cols_from]
-        if (veg_type == NO_FUEL) or (
-            fire[rows_from, cols_from, realization] == 1
-        ):
-            continue
-        fire[rows_from, cols_from, realization] = 1  # set state
-        for neighbour, dist_to, angle_to in zip(
-            NEIGHBOURS, NEIGHBOURS_DISTANCE, NEIGHBOURS_ANGLE
-        ):
-            rows_to = rows_from + neighbour[0]
-            cols_to = cols_from + neighbour[1]
-            w_dir_r = wind_dir[rows_from, cols_from] + (np.pi / 16) * (
-                0.5 - random()
-            )
-            w_speed_r = wind_speed[rows_from, cols_from] * (
-                1.2 - 0.4 * random()
-            )
-            moisture_r = moisture[rows_to, cols_to]
-            dem_from = dem[rows_from, cols_from]
-            veg_from = veg[rows_from, cols_from]
-            veg_to = veg[rows_to, cols_to]
-            dem_to = dem[rows_to, cols_to]
-            # keep only pixels where fire can spread
-            if fire[rows_to, cols_to, realization] != 0 or veg_to == NO_FUEL:
-                continue
-            # get the probability for all the pixels
-            transition_probability = fuels.get_transition_probability(
-                veg_from,
-                veg_to,  # type: ignore
-            )
-            moisture_effect = moist_proba_correction_1(moisture_r)  # type: ignore
-            dh = dem_to - dem_from
-            alpha_wh = w_h_effect_on_probability(
-                angle_to, w_speed_r, w_dir_r, dh, dist_to
-            )
-            alpha_wh = np.maximum(alpha_wh, 0)  # prevent alpha < 0
-            p_prob = 1 - (1 - transition_probability) ** alpha_wh
-            p_prob = clip(p_prob * moisture_effect, 0, 1.0)
-            # try the propagation
-            do_propagate = p_prob > random()
-            if not do_propagate:
-                continue
-            # get the propagation time for the propagating pixels
-            # transition_time = p_time(dem_from[p], dem_to[p],
-            fuel_from = fuels.get_fuel(veg_from)  # type: ignore
-            transition_time, ros_value = p_time_wang(
-                fuel_from.v0 / 60,  # m/min!!!
-                dem_from,
-                dem_to,  # type: ignore
-                angle_to,
-                dist_to,
-                moisture_r,  # type: ignore
-                w_dir_r,
-                w_speed_r,
-            )
-            transition_time = int(transition_time)
-            if transition_time < 1:
-                transition_time = 1
+) -> list[tuple[int, int, int, float, float]]:
+    fire_spread_updates = []
 
-            fuel_to = fuels.get_fuel(veg_to)  # type: ignore
-            # evaluate LHV of dead fuel
-            lhv_dead_fuel_value = lhv_dead_fuel(fuel_to.hhv, moisture_r)  # type: ignore
-            # evaluate LHV of the canopy
-            lhv_canopy_value = lhv_canopy(fuel_to.hhv, fuel_to.humidity)
-            # evaluate fireline intensity
-            fireline_intensity_value = fireline_intensity(
-                fuel_to.d0,
-                fuel_to.d1,
-                ros_value,
-                lhv_dead_fuel_value,
-                lhv_canopy_value,
+    dem_from = dem[row, col]
+    veg_from = veg[row, col]
+    w_dir_r = wind_dir[row, col]
+    w_speed_r = wind_speed[row, col]
+
+    for neighbour, dist_to, angle_to in zip(
+        NEIGHBOURS, NEIGHBOURS_DISTANCE, NEIGHBOURS_ANGLE
+    ):
+        row_to = row + neighbour[0]
+        col_to = col + neighbour[1]
+        veg_to = veg[row_to, col_to]
+
+        # keep only pixels where fire can spread
+        if fire[row_to, col_to] != 0 or veg_to == NO_FUEL:
+            continue
+
+        dh = dem[row_to, col_to] - dem_from
+        moisture_r = moisture[row_to, col_to]
+        transition_probability = fuels.get_transition_probability(
+            veg_from,
+            veg_to,  # type: ignore
+        )
+
+        p_prob = get_probability_to_neighbour(
+            angle_to,
+            dist_to,
+            w_dir_r,
+            w_speed_r,
+            moisture_r,  # type: ignore
+            dh,
+            transition_probability,
+        )
+
+        do_propagate = p_prob > random()
+        if not do_propagate:
+            continue
+
+        fuel_from = fuels.get_fuel(veg_from)  # type: ignore
+        fuel_to = fuels.get_fuel(veg_to)  # type: ignore
+
+        transition_time, ros, fireline_intensity = calculate_fire_behavior(
+            fuel_from,
+            fuel_to,
+            dh,
+            dist_to,
+            angle_to,
+            moisture_r,  # type: ignore
+            w_dir_r,
+            w_speed_r,
+        )
+        fire_spread_updates.append(
+            (transition_time, row_to, col_to, ros, fireline_intensity)
+        )
+    return fire_spread_updates
+
+
+@jit(cache=True, parallel=True, nopython=True, fastmath=True)
+def apply_updates_fn(
+    rows: npt.NDArray[np.integer],
+    cols: npt.NDArray[np.integer],
+    realizations: npt.NDArray[np.integer],
+    time: int,
+    veg: npt.NDArray[np.integer],
+    dem: npt.NDArray[np.floating],
+    fire: npt.NDArray[np.int8],
+    moisture: npt.NDArray[np.floating],
+    wind_dir: npt.NDArray[np.floating],
+    wind_speed: npt.NDArray[np.floating],
+    fuels: FuelSystem,
+) -> UpdateBatchWithTime:
+    next_rows = []
+    next_cols = []
+    next_realizations = []
+    next_times = []
+    next_ros = []
+    next_fireline_intensities = []
+
+    for index in range(len(rows)):
+        row: int = rows[index]
+        col: int = cols[index]
+        realization: int = realizations[index]
+
+        veg_type = veg[row, col]
+        if (veg_type == NO_FUEL) or (fire[row, col, realization] == 1):
+            continue
+
+        fire_spread_update = apply_single_update(
+            row,
+            col,
+            veg,
+            dem,
+            fire[:, :, realization],
+            moisture,
+            wind_dir,
+            wind_speed,  # type: ignore
+            fuels,
+        )
+
+        for fire_spread in fire_spread_update:
+            (transition_time, row_to, col_to, ros, fireline_intensity) = (
+                fire_spread
             )
-            fireline_int[rows_to, cols_to, realization] = (
-                fireline_intensity_value
-            )
-            ros[rows_to, cols_to, realization] = ros_value
-            # if do_spotting:
-            #     nr_spot, nc_spot, nt_spot, transition_time_spot =
-            # compute_spotting(
-            #         veg_type, update
-            #     )
-            #     # row-coordinates of the "spotted cells"
-            # added to the other ones
-            #     rows_to = np.append(rows_to, nr_spot)
-            #     # column-coordinates of the "spotted cells"
-            # added to the other ones
-            #     cols_to = np.append(cols_to, nc_spot)
-            #     # time propagation of "spotted cells"
-            # added to the other ones
-            #     nt = np.append(nt, nt_spot)
-            #     transition_time = np.append(transition_time,
-            # transition_time_spot)
-            new_time = time + transition_time
-            # schedule the new updates
-            new_update = np.array([new_time, rows_to, cols_to, realization])
-            new_updates.append(new_update)
-    return new_updates
+            next_times.append(time + transition_time)
+            next_rows.append(row_to)
+            next_cols.append(col_to)
+            next_realizations.append(realization)
+            next_ros.append(ros)
+            next_fireline_intensities.append(fireline_intensity)
+
+    return (
+        np.array(next_times),
+        np.array(next_rows),
+        np.array(next_cols),
+        np.array(next_realizations),
+        np.array(next_ros),
+        np.array(next_fireline_intensities),
+    )
