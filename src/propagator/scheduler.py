@@ -193,18 +193,11 @@ class Scheduler:
                 )
 
     def active(self) -> npt.NDArray[np.integer]:
-        # if not self:
-        #     return np.array([], dtype=int)
-        # arrays = [
-        #     a for batches in self._queue.values() for a in batches.updates
-        # ]
-        # if len(arrays) == 1:
-        #     the_coords = arrays[0]
-        #     return np.array([the_coords[2]])
-
-        # stacked = np.vstack(arrays)
-        # return np.unique(stacked[:, 2])
-        ...
+        arrays = [
+            event.updates.realizations for event in self._queue.values()
+        ]
+        stacked = np.concatenate(arrays)
+        return np.unique(stacked)
 
     def __len__(self) -> int:
         return len(self._queue)

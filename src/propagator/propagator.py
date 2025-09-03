@@ -84,14 +84,6 @@ class Propagator:
             shape + (self.realizations,), dtype=np.float32
         )
 
-    # def set_ignitions(self, ignitions: Ignitions) -> None:
-    #     """
-    #     Apply ignitions to the state of the simulation.
-    #     """
-    #     self.scheduler.push_ignitions(ignitions)
-    #     for p in ignitions.coords:
-    #         self.fire[p[0], p[1], p[2]] = 0
-
     def compute_fire_probability(self) -> npt.NDArray[np.floating]:
         """Return mean burn probability across realizations for each cell.
 
