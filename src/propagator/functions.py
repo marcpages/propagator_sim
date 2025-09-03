@@ -5,12 +5,12 @@ modulators for wind/slope/moisture, fire spotting distance, and fireline
 intensity utilities used by the core propagator.
 """
 
-from random import random
 from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
 from numba import jit
+from numpy.random import random
 
 from propagator.constants import (
     C_MOIST,
@@ -44,7 +44,7 @@ from propagator.models import (
     FuelSystem,
     PMoistFn,
     PTimeFn,
-    UpdateBatchWithTime,
+    UpdateBatchTuple,
 )
 
 type ROS_model_literal = Literal["default", "wang", "rothermel"]
@@ -575,7 +575,7 @@ def calculate_fire_behavior(
 # schedule the new updates
 
 
-@jit(cache=True, parallel=True, nopython=True, fastmath=True)
+@jit(cache=True, parallel=False, nopython=True, fastmath=True)
 def apply_single_update(
     row: int,
     col: int,
@@ -645,8 +645,8 @@ def apply_single_update(
     return fire_spread_updates
 
 
-@jit(cache=True, parallel=True, nopython=True, fastmath=True)
-def apply_updates_fn(
+@jit(cache=True, parallel=False, nopython=True, fastmath=True)
+def next_updates_fn(
     rows: npt.NDArray[np.integer],
     cols: npt.NDArray[np.integer],
     realizations: npt.NDArray[np.integer],
@@ -658,7 +658,7 @@ def apply_updates_fn(
     wind_dir: npt.NDArray[np.floating],
     wind_speed: npt.NDArray[np.floating],
     fuels: FuelSystem,
-) -> UpdateBatchWithTime:
+) -> UpdateBatchTuple:
     next_rows = []
     next_cols = []
     next_realizations = []
@@ -670,10 +670,6 @@ def apply_updates_fn(
         row: int = rows[index]
         col: int = cols[index]
         realization: int = realizations[index]
-
-        veg_type = veg[row, col]
-        if (veg_type == NO_FUEL) or (fire[row, col, realization] == 1):
-            continue
 
         fire_spread_update = apply_single_update(
             row,

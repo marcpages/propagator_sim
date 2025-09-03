@@ -25,7 +25,7 @@ PopResult = Tuple[int, "SchedulerEvent"]
 class SchedulerEvent:
     """Represents a scheduled event in the simulation."""
 
-    updates: Optional[UpdateBatch] = None
+    updates: UpdateBatch = field(default_factory=UpdateBatch)
 
     # boundary_conditions
     moisture: Optional[npt.NDArray[np.floating]] = None
@@ -109,46 +109,18 @@ class Scheduler:
 
     def push_updates(self, updates: UpdateBatchWithTime) -> None:
         event: SchedulerEvent | None
-        times, rows, cols, realizations, ros, fireline_intensity = updates
+        updates_at_time_dict = updates.split_by_time()
 
-        for time in np.unique(times):
-            index = times == time
-
-            cols_at_time = cols[index]
-            rows_at_time = rows[index]
-            realizations_at_time = realizations[index]
-            ros_at_time = ros[index]
-            fireline_intensity_at_time = fireline_intensity[index]
-
+        for time, update in updates_at_time_dict.items():
             if time in self._queue:
                 event = self._queue.get(time)
             else:
                 event = SchedulerEvent()
                 self._queue[time] = event
-
             if event is None:
                 raise ValueError("SchedulerEvent should not be None here")
 
-            if event.updates is None:
-                update_at_time: UpdateBatch = (
-                    rows_at_time,
-                    cols_at_time,
-                    realizations_at_time,
-                    ros_at_time,
-                    fireline_intensity_at_time,
-                )
-                event.updates = update_at_time
-            else:
-                previous_update = event.updates
-                event.updates = (
-                    np.concatenate([previous_update[0], rows_at_time]),
-                    np.concatenate([previous_update[1], cols_at_time]),
-                    np.concatenate([previous_update[2], realizations_at_time]),
-                    np.concatenate([previous_update[3], ros_at_time]),
-                    np.concatenate(
-                        [previous_update[4], fireline_intensity_at_time]
-                    ),
-                )
+            event.updates.extend(update)
 
     def pop(self) -> PopResult:
         if not self:
@@ -189,13 +161,13 @@ class Scheduler:
             )
             ros = np.zeros_like(points_repeated[:, 0], dtype=np.float32)
             self.push_updates(
-                (
-                    times_repeated,
-                    points_repeated[:, 0],
-                    points_repeated[:, 1],
-                    realizations,
-                    fireline_intensity,
-                    ros,
+                UpdateBatchWithTime(
+                    times=times_repeated,
+                    rows=points_repeated[:, 0],
+                    cols=points_repeated[:, 1],
+                    realizations=realizations,
+                    fireline_intensities=fireline_intensity,
+                    rates_of_spread=ros,
                 )
             )
 

@@ -6,7 +6,7 @@ moisture inputs. Public dataclasses capture boundary conditions, actions,
 summary statistics, and output snapshots suitable for CLI and IO layers.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, Protocol
 
@@ -20,15 +20,7 @@ from numba.typed import Dict
 # with stdlib typing, but we DO lock the dtype to integer families.
 FireBehaviourUpdate = tuple[int, int, int, float, float]
 
-UpdateBatch = tuple[
-    npt.NDArray[np.integer],
-    npt.NDArray[np.integer],
-    npt.NDArray[np.integer],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.float32],
-]
-
-UpdateBatchWithTime = tuple[
+UpdateBatchTuple = tuple[
     npt.NDArray[np.integer],
     npt.NDArray[np.integer],
     npt.NDArray[np.integer],
@@ -37,8 +29,65 @@ UpdateBatchWithTime = tuple[
     npt.NDArray[np.float32],
 ]
 
+@dataclass
+class UpdateBatch:
+    rows: npt.NDArray[np.integer] = field(default_factory=lambda: np.empty((0,), dtype=np.int32))
+    cols: npt.NDArray[np.integer] = field(default_factory=lambda: np.empty((0,), dtype=np.int32))
+    realizations: npt.NDArray[np.integer] = field(default_factory=lambda: np.empty((0,), dtype=np.int32))
+    rates_of_spread: npt.NDArray[np.float32] = field(default_factory=lambda: np.empty((0,), dtype=np.float32))
+    fireline_intensities: npt.NDArray[np.float32] = field(default_factory=lambda: np.empty((0,), dtype=np.float32))
 
-RNG = np.random.default_rng(12345)
+    def extend(self, other: "UpdateBatch") -> None:
+        self.rows = np.concatenate([self.rows, other.rows])
+        self.cols = np.concatenate([self.cols, other.cols])
+        self.realizations = np.concatenate([self.realizations, other.realizations])
+        self.rates_of_spread = np.concatenate([self.rates_of_spread, other.rates_of_spread])
+        self.fireline_intensities = np.concatenate([self.fireline_intensities, other.fireline_intensities])
+
+
+@dataclass(frozen=True)
+class UpdateBatchWithTime:
+    times: npt.NDArray[np.integer]
+    rows: npt.NDArray[np.integer]
+    cols: npt.NDArray[np.integer]
+    realizations: npt.NDArray[np.integer]
+    rates_of_spread: npt.NDArray[np.float32]
+    fireline_intensities: npt.NDArray[np.float32]
+
+    @staticmethod
+    def from_tuple(data: UpdateBatchTuple) -> "UpdateBatchWithTime":
+        times, rows, cols, realizations, rates_of_spread, fireline_intensities = data
+        return UpdateBatchWithTime(
+            times=times,
+            rows=rows,
+            cols=cols,
+            realizations=realizations,
+            rates_of_spread=rates_of_spread,
+            fireline_intensities=fireline_intensities,
+        )
+
+    def split_by_time(self) -> dict[int, UpdateBatch]:
+        result: dict[int, UpdateBatch] = {}
+        for time in np.unique(self.times):
+            index = self.times == time
+
+            cols_at_time = self.cols[index]
+            rows_at_time = self.rows[index]
+            realizations_at_time = self.realizations[index]
+            ros_at_time = self.rates_of_spread[index]
+            fireline_intensity_at_time = self.fireline_intensities[index]
+
+            update_at_time = UpdateBatch(
+                rows_at_time,
+                cols_at_time,
+                realizations_at_time,
+                ros_at_time,
+                fireline_intensity_at_time,
+            )
+            result[time] = update_at_time
+
+        return result
+
 
 
 class PropagatorError(Exception):

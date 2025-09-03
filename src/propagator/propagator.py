@@ -15,9 +15,9 @@ from propagator.constants import (
     FUEL_SYSTEM_LEGACY,
 )
 from propagator.functions import (
-    apply_updates_fn,
     get_p_moist_fn,
     get_p_time_fn,
+    next_updates_fn,
 )
 from propagator.models import (
     BoundaryConditions,
@@ -311,7 +311,7 @@ class Propagator:
     def apply_updates(
         self,
         updates: UpdateBatch,
-    ) -> UpdateBatchWithTime:
+    ):
         """Apply a batch of burning updates and schedule new ones.
         Parameters
         ----------
@@ -324,10 +324,19 @@ class Propagator:
             Pairs of (time, array[n, 3]) for future updates to schedule.
         """
         moisture = self.get_moisture()
-        # coordinates of the next updates
-        rows, cols, realizations, ross, firelines = updates
 
-        new_updates_arrays = apply_updates_fn(
+        must_be_updated = self.fire[updates.rows, updates.cols, updates.realizations] == 0
+        rows = updates.rows[must_be_updated]
+        cols = updates.cols[must_be_updated]
+        realizations = updates.realizations[must_be_updated]
+        ros = updates.rates_of_spread[must_be_updated]
+        fireline_intensity = updates.fireline_intensities[must_be_updated]
+
+        self.fire[rows, cols, realizations] = 1
+        self.ros[rows, cols, realizations] = ros
+        self.fireline_int[rows, cols, realizations] = fireline_intensity
+
+        new_updates_tuple = next_updates_fn(
             rows,
             cols,
             realizations,
@@ -341,7 +350,8 @@ class Propagator:
             self.fuels,
         )
 
-        return new_updates_arrays
+        next_updates = UpdateBatchWithTime.from_tuple(new_updates_tuple)
+        self.scheduler.push_updates(next_updates)
 
     def decay_actions_moisture(
         self, time_delta: int, decay_factor: float = 0.01
@@ -406,15 +416,7 @@ class Propagator:
             self.veg[mask] = scheduler_event.vegetation_changes[mask]
 
         if scheduler_event.updates is not None:
-            new_updates = self.apply_updates(scheduler_event.updates)
-            rows, cols, realizations, ros, fireline_intensity = (
-                scheduler_event.updates
-            )
-            self.fire[rows, cols, realizations] = 1
-            self.ros[rows, cols, realizations] = ros
-            self.fireline_int[rows, cols, realizations] = fireline_intensity
-
-            self.scheduler.push_updates(new_updates)
+            self.apply_updates(scheduler_event.updates)
 
     def get_output(self) -> PropagatorOutput:
         """Assemble the current outputs and summary stats into a dataclass.

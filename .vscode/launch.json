@@ -44,6 +44,21 @@
                 "PYTHONPATH": "${workspaceFolder}",
                 "PROJ_LIB": ".venv/share/proj/"
             }
-        }
+        },
+
+        {
+            "name": "Python Debugger: run example",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "example", 
+            "console": "integratedTerminal",
+            "args": [
+            ],
+            "env": {
+                "NUMBA_DISABLE_JIT": "1",
+                "PYTHONPATH": "${workspaceFolder}",
+                "PROJ_LIB": ".venv/share/proj/"
+            }
+        },
     ]
 }
