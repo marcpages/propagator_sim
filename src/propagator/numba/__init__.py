@@ -4,5 +4,5 @@ from .functions import (  # noqa: F401
     get_p_moisture_fn,
     get_p_time_fn,
 )
-from .models import FUEL_SYSTEM_LEGACY, fuelsystem_from_dict  # noqa: F403
+from .models import FUEL_SYSTEM_LEGACY, fuelsystem_from_dict  # noqa: F401
 from .propagation import *  # noqa: F403

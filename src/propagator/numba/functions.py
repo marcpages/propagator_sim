@@ -9,30 +9,41 @@ from typing import Any, Literal
 
 import numpy as np
 from numba import jit
-from numpy.random import normal
 
-from propagator.constants import (
-    C_MOIST,
-    D1,
-    D2,
-    D3,
-    D4,
-    D5,
-    FIRE_SPOTTING_DISTANCE_COEFFICIENT,
-    M1,
-    M2,
-    M3,
-    M4,
-    ROTHERMEL_ALPHA1,
-    ROTHERMEL_ALPHA2,
-    SPOTTING_RN_MEAN,
-    SPOTTING_RN_STD,
-    WANG_BETA1,
-    WANG_BETA2,
-    WANG_BETA3,
-    A,
-    Q,
-)
+# constants for wind/slope effect
+D1 = 0.5
+D2 = 1.4
+D3 = 8.2
+D4 = 2.0
+D5 = 50.0
+A = 1 - ((D1 * (D2 * np.tanh((0 / D3) - D4))) + (0 / D5))
+
+# Fire-spotting distance coefficient
+FIRE_SPOTTING_DISTANCE_COEFFICIENT = 0.191
+
+# Rothermel parameters
+ROTHERMEL_ALPHA1 = 0.0693
+ROTHERMEL_ALPHA2 = 0.0576
+
+# Wang parameters
+WANG_BETA1 = 0.1783
+WANG_BETA2 = 3.533
+WANG_BETA3 = 1.2
+
+# Moisture constants
+# probabilità
+M1 = -3.5995
+M2 = 5.2389
+M3 = -2.6355
+M4 = 1.019
+
+# RoS
+C_MOIST = -0.014
+
+
+# variable for fireline intensity
+Q = 2442.0
+
 
 RateOfSpreadModel = Literal["default", "wang", "rothermel"]
 MoistureModel = Literal["default", "trucchia", "baghino"]
@@ -40,7 +51,22 @@ MoistureModel = Literal["default", "trucchia", "baghino"]
 
 @jit(cache=True)
 def clip(x: float, min: float, max: float) -> float:
-    """Clip x to the range [min, max]."""
+    """Clip x to the range [min, max].
+
+    Parameters
+    ----------
+    x : float
+        Value to clip.
+    min : float
+        Minimum value.
+    max : float
+        Maximum value.
+
+    Returns
+    -------
+    float
+        Clipped value.
+    """
     if x < min:
         return min
     if x > max:
@@ -50,7 +76,18 @@ def clip(x: float, min: float, max: float) -> float:
 
 @jit(cache=True)
 def normalize(angle_to_norm: float) -> float:
-    """Normalize an angle to the interval [-pi, pi)."""
+    """Normalize an angle to the interval [-pi, pi).
+
+    Parameters
+    ----------
+    angle_to_norm : float
+        Angle to normalize (radians).
+
+    Returns
+    -------
+    float
+        Normalized angle (radians).
+    """
     return (angle_to_norm + np.pi) % (2 * np.pi) - np.pi  # type: ignore[return-value]
 
 
@@ -97,17 +134,17 @@ def p_time_rothermel(
     Parameters
     ----------
     v0 : float
-        Base ROS vector per vegetation type.
+        Base Rate of Spread for the cell vegetation (units: m/min)
     dh : float
-        Elevation difference between source and neighbor cells.
+        Elevation difference between source and neighbor cells. (units: m)
     angle : float
-        Direction to neighbor (radians).
+        Direction to neighbor (units: radians between [-π, π], 0 is east->west)
     dist : float
-        Lattice distance to neighbor (cells).
+        Distance between cells (units: m).
     moist : float
-        Moisture values (%).
+        Moisture values (units: fraction).
     w_dir : float
-        Wind direction (radians).
+        Wind direction (units: radians between [-π, π], 0 is east->west).
     w_speed : float
         Wind speed (km/h).
 
@@ -405,30 +442,6 @@ def p_moisture_baghino(
 
 
 @jit(cache=True)
-def fire_spotting(
-    angle_to: float,
-    w_dir: float,
-    w_speed: float,
-) -> float:
-    """Evaluate spotting distance using Alexandridis' formulation."""
-    r_n = normal(
-        SPOTTING_RN_MEAN, SPOTTING_RN_STD
-    )  # main thrust of the ember: sampled from a
-    # Gaussian Distribution (Alexandridis et al, 2008 and 2011)
-    w_speed_ms = w_speed / 3.6  # wind speed [m/s]
-    # Alexandridis' formulation for spotting distance
-    d_p = r_n * np.exp(
-        w_speed_ms
-        * FIRE_SPOTTING_DISTANCE_COEFFICIENT
-        * (np.cos(w_dir - angle_to) - 1)
-    )
-    return d_p
-
-
-# functions useful for evaluating the fire line intensity
-
-
-@jit(cache=True)
 def lhv_fuel(
     hhv: float,
     moisture: float,
@@ -485,8 +498,8 @@ def fireline_intensity(
 
 @jit(cache=True, nopython=True, fastmath=True)
 def get_probability_to_neighbour(
-    angle_to: float,
-    dist_to: float,
+    angle: float,
+    dist: float,
     w_dir: float,
     w_speed: float,
     moisture: float,
@@ -499,9 +512,9 @@ def get_probability_to_neighbour(
 
     Parameters
     ----------
-    angle_to: float
+    angle: float
         The angle to the neighboring pixel (units: radians between [-π, π], 0 is east->west).
-    dist_to: float
+    dist: float
         The distance to the neighboring pixel (units: meters).
     w_dir: float
         The wind direction (units: radians between [-π, π], 0 is east->west).
@@ -525,7 +538,7 @@ def get_probability_to_neighbour(
 
     moisture_effect = p_moist_fn(moisture)
     alpha_wh = w_h_effect_on_probability(
-        angle_to, w_speed, w_dir, dh, dist_to
+        angle, w_speed, w_dir, dh, dist
     )
 
     alpha_wh = np.maximum(alpha_wh, 0)  # prevent alpha < 0

@@ -9,24 +9,77 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 from numba import jit
-from numpy.random import poisson, random, uniform
+from numpy.random import normal, poisson, random, uniform
 
-from propagator.constants import (
-    LAMBDA_SPOTTING,
-    NEIGHBOURS,
-    NEIGHBOURS_ANGLE,
-    NEIGHBOURS_DISTANCE,
-    NO_FUEL,
-    P_C0,
-)
+from propagator.constants import NO_FUEL
 from propagator.models import UpdateBatchTuple
-from propagator.numba.functions import (
-    fire_spotting,
+from propagator.numba.functions import FIRE_SPOTTING_DISTANCE_COEFFICIENT
+
+from .functions import (
     fireline_intensity,
     get_probability_to_neighbour,
     lhv_fuel,
 )
-from propagator.numba.models import Fuel, FuelSystem
+from .models import Fuel, FuelSystem
+
+# P_c = P_c0 (1 + P_cd), where P_c0 constant spread_probability of
+# ignition by spotting and P_cd is a correction factor that
+# depends on vegetation type and density...
+P_C0 = 0.6
+
+# The following constants are used in the Fire-Spotting model.
+# Alexandridis et al. (2009,2011)
+LAMBDA_SPOTTING = 2.0
+SPOTTING_RN_MEAN = 100
+SPOTTING_RN_STD = 25
+
+NEIGHBOURS = np.array(
+    [
+        (-1, -1),
+        (-1, 0),
+        (-1, 1),
+        (0, -1),
+        (0, 1),
+        (1, -1),
+        (1, 0),
+        (1, 1),
+    ]
+)
+NEIGHBOURS_DISTANCE = np.array([1.414, 1, 1.414, 1, 1, 1.414, 1, 1.414])
+NEIGHBOURS_ANGLE = np.array(
+    [
+        np.pi * 3 / 4,
+        np.pi / 2,
+        np.pi / 4,
+        np.pi,
+        0,
+        -np.pi * 3 / 4,
+        -np.pi / 2,
+        -np.pi / 4,
+    ]
+)
+
+
+@jit(cache=True)
+def fire_spotting(
+    angle_to: float,
+    w_dir: float,
+    w_speed: float,
+) -> float:
+    """Evaluate spotting distance using Alexandridis' formulation."""
+    r_n = normal(
+        SPOTTING_RN_MEAN, SPOTTING_RN_STD
+    )  # main thrust of the ember: sampled from a
+    # Gaussian Distribution (Alexandridis et al, 2008 and 2011)
+    w_speed_ms = w_speed / 3.6  # wind speed [m/s]
+    # Alexandridis' formulation for spotting distance
+    d_p = r_n * np.exp(
+        w_speed_ms
+        * FIRE_SPOTTING_DISTANCE_COEFFICIENT
+        * (np.cos(w_dir - angle_to) - 1)
+    )
+    return d_p
+
 
 
 @jit(cache=True, nopython=True, fastmath=True)
