@@ -462,26 +462,24 @@ def fire_spotting(
 
 
 @jit(cache=True)
-def lhv_dead_fuel(
+def lhv_fuel(
     hhv: float,
-    dffm: float,
+    moisture: float,
 ) -> float:
-    """Lower heating value of dead fuels given higher
-    heating value and FFMC."""
-    lhv = hhv * (1.0 - (dffm / 100.0)) - Q * (dffm / 100.0)
+    """
+    Lower heating value of fuels given higher
+    heating value and FFMC.
+
+    Parameters
+    ----------
+    hhv : float
+        Higher heating value of dead fuel (kJ/kg).
+    dffm : float
+        Dead fuel moisture content (fractional).
+    """
+    lhv = hhv * (1.0 - moisture) - Q * moisture
     return lhv
 
-
-@jit(cache=True)
-def lhv_canopy(
-    hhv: float,
-    hum: float,
-) -> float:
-    """Lower heating value of canopy fuels given humidity (percent)."""
-    lhv = hhv * (1.0 - (hum / 100.0)) - Q * (hum / 100.0)
-    if np.isnan(lhv):
-        lhv = 0
-    return lhv
 
 
 @jit(cache=True)
@@ -491,47 +489,30 @@ def fireline_intensity(
     ros: float,
     lhv_dead_fuel: float,
     lhv_canopy: float,
-    rg: float | None = None,
-) -> float:
-    """Estimate fireline intensity (kW/m) from fuel loads and ROS.
 
-    Supports an optional `rg` fraction to blend surface/canopy contributions.
+) -> float:
     """
-    # if rg is not None:
-    #     rg_idx = ~np.isnan(rg)
-    #     d1_idx = (not np.isclose(d1, 0.0, rtol=1e-09, atol=1e-09)) & rg_idx
-    #     d0_idx = (np.isclose(d1, 0.0, rtol=1e-09, atol=1e-09)) & rg_idx
-    #     intensity[d0_idx] = (
-    #         ros[d0_idx]
-    #         * ((lhv_dead_fuel[d0_idx] * d0[d0_idx] * (1.0 - rg[d0_idx])) / 2)
-    #         / 60.0
-    #     )
-    #     intensity[d1_idx] = (
-    #         ros[d1_idx]
-    #         * (
-    #             (
-    #                 lhv_dead_fuel[d1_idx] * d0[d1_idx]
-    #                 + lhv_canopy[d1_idx] * (d1[d1_idx] * (1 - rg[d1_idx]))
-    #             )
-    #             / 2
-    #         )
-    #         / 60.0
-    #     )
-    #     intensity[~rg_idx] = (
-    #         ros[~rg_idx]
-    #         * (
-    #             (
-    #                 lhv_dead_fuel[~rg_idx] * d0[~rg_idx]
-    #                 + lhv_canopy[~rg_idx] * d1[~rg_idx]
-    #             )
-    #             / 2
-    #         )
-    #         / 60.0
-    #     )
-    # else:
-    # divided by 60 instead of 3600 because RoS is required in m/s and
-    # it is given in m/min (so it has to be divided by 60)
-    intensity = ros * (lhv_dead_fuel * d0 + lhv_canopy * d1) / 60.0
+    Estimate fireline intensity (kW/m) from fuel loads and Rate of spread.
+
+    Parameters
+    ----------
+    d0 : float
+        Dead fuel density (kg/m^2).
+    d1 : float
+        Canopy fuel density (kg/m^2).
+    ros : float
+        Rate of spread (m/min).
+    lhv_dead_fuel : float
+        Lower heating value of dead fuel (kJ/kg).
+    lhv_canopy : float
+        Lower heating value of canopy fuel (kJ/kg).
+
+    Returns
+    -------
+    float
+        Fireline intensity (kW/m).
+    """
+    intensity = (ros / 60) * (lhv_dead_fuel * d0 + lhv_canopy * d1)
     return intensity
 
 
@@ -616,9 +597,9 @@ def calculate_fire_behavior(
         transition_time = 1
 
     # evaluate LHV of dead fuel
-    lhv_dead_fuel_value = lhv_dead_fuel(fuel_to.hhv, moisture_r)  # type: ignore
+    lhv_dead_fuel_value = lhv_fuel(fuel_to.hhv, moisture_r)  # type: ignore
     # evaluate LHV of the canopy
-    lhv_canopy_value = lhv_canopy(fuel_to.hhv, fuel_to.humidity)
+    lhv_canopy_value = lhv_fuel(fuel_to.hhv, fuel_to.humidity/100)
     # evaluate fireline intensity
     fireline_intensity_value = fireline_intensity(
         fuel_to.d0,
