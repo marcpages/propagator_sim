@@ -3,10 +3,11 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import List, Literal, Optional, Mapping, Dict, Tuple
+from typing import List, Literal, Mapping, Optional, Tuple
 from warnings import warn
-import yaml
+
 import numpy as np
+import yaml
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -15,16 +16,17 @@ from pydantic import (
     model_validator,
 )
 
+from propagator.numba import FUEL_SYSTEM_LEGACY, fuelsystem_from_dict
+
 # ---- project utils ----------------------------------------------------------
-from propagator.functions import (
+from propagator.numba import (
     MoistureModel,
     RateOfSpreadModel,
     get_p_moisture_fn,
     get_p_time_fn,
 )
+from propagator.numba.models import FuelSystem
 from propagator.propagator import BoundaryConditions
-from propagator.models import FuelSystem, fuelsystem_from_dict
-from propagator.constants import FUEL_SYSTEM_LEGACY
 from propagator_io.boundary_conditions import TimedInput
 from propagator_io.geo import GeographicInfo
 from propagator_io.geometry import (

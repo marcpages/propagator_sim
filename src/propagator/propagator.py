@@ -12,19 +12,20 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from propagator.constants import CELLSIZE, FUEL_SYSTEM_LEGACY
-from propagator.functions import (
-    get_p_moisture_fn,
-    get_p_time_fn,
-    next_updates_fn,
-)
+from propagator.constants import CELLSIZE
 from propagator.models import (
     BoundaryConditions,
-    FuelSystem,
     PropagatorOutput,
     PropagatorStats,
     UpdateBatch,
     UpdateBatchWithTime,
+)
+from propagator.numba import (
+    FUEL_SYSTEM_LEGACY,
+    FuelSystem,
+    get_p_moisture_fn,
+    get_p_time_fn,
+    next_updates_fn,
 )
 from propagator.scheduler import Scheduler
 

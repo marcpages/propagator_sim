@@ -2,8 +2,7 @@ from time import time
 
 import numpy as np
 
-from propagator.constants import FUEL_SYSTEM_LEGACY
-from propagator.propagator import BoundaryConditions, Propagator
+from propagator import FUEL_SYSTEM_LEGACY, BoundaryConditions, Propagator
 from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
 
 loader = PropagatorDataFromGeotiffs(

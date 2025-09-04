@@ -2,7 +2,9 @@
 
 ## 1. Overview
 
-This file enables AI coding assistants to generate features that are fully aligned with the architecture, style, and conventions of the PROPAGATOR wildfire simulation project. All guidance is based strictly on observed patterns and actual code in the repository—no invented or external best practices are included.
+This file enables AI coding assistants to generate features that are fully aligned with the architecture, style, and conventions of the PROPAGATOR wildfire simulation project. All guidance is based strictly on observed patterns and actual code in the repository. No invented or external best practices are included.
+Propagator is a simulation engine for wildfire spread. It is written using numpy + numba.
+The docstrings are written using numpy docstyle
 
 ## 2. File Category Reference
 
