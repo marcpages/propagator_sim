@@ -198,7 +198,6 @@ def compute_spotting(
         if uniform() > P_c:
             continue
 
-        
         ember_landing_time = max(ember_landing_time, 1)
 
         spotting_update = (ember_landing_time, row_to, col_to, np.nan, np.nan)
