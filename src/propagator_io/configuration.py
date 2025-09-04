@@ -17,9 +17,9 @@ from pydantic import (
 
 # ---- project utils ----------------------------------------------------------
 from propagator.functions import (
-    Moisture_model_literal,
-    ROS_model_literal,
-    get_p_moist_fn,
+    MoistureModel,
+    RateOfSpreadModel,
+    get_p_moisture_fn,
     get_p_time_fn,
 )
 from propagator.propagator import BoundaryConditions
@@ -91,10 +91,10 @@ class PropagatorConfigurationLegacy(BaseModel):
         default_factory=list, description="List of boundary conditions"
     )
     do_spotting: bool = Field(False, description="Spotting option")
-    ros_model: ROS_model_literal = Field(
+    ros_model: RateOfSpreadModel = Field(
         "default", description="ROS model name"
     )
-    prob_moist_model: Moisture_model_literal = Field(
+    prob_moist_model: MoistureModel = Field(
         "default", description="Moisture model name"
     )
     p_time_fn: Optional[object] = Field(default=None, exclude=True)
@@ -198,7 +198,7 @@ class PropagatorConfigurationLegacy(BaseModel):
 
         # set the functions
         self.p_time_fn = get_p_time_fn(self.ros_model)
-        self.p_moist_fn = get_p_moist_fn(self.prob_moist_model)
+        self.p_moist_fn = get_p_moisture_fn(self.prob_moist_model)
         if self.p_time_fn is None:
             raise ValueError(f"Unknown ROS model: {self.ros_model}")
         if self.p_moist_fn is None:

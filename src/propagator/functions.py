@@ -5,11 +5,11 @@ modulators for wind/slope/moisture, fire spotting distance, and fireline
 intensity utilities used by the core propagator.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import numpy.typing as npt
-from numba import jit
+from numba import jit, typed, types
 from numpy.random import normal, poisson, random, uniform
 
 from propagator.constants import (
@@ -44,15 +44,14 @@ from propagator.constants import (
 from propagator.models import (
     Fuel,
     FuelSystem,
-    PMoistFn,
-    PTimeFn,
     UpdateBatchTuple,
 )
 
-type ROS_model_literal = Literal["default", "wang", "rothermel"]
-type Moisture_model_literal = Literal[
-    "default", "new_formulation", "rothermel"
+RateOfSpreadModel = Literal["default", "wang", "rothermel"]
+MoistureModel = Literal[
+    "default", "trucchia", "rothermel"
 ]
+
 
 
 @jit(cache=True)
@@ -91,7 +90,7 @@ def load_parameters(
         p_veg = np.loadtxt(p_vegetation)
 
 
-def get_p_time_fn(ros_model_code: ROS_model_literal) -> PTimeFn:
+def get_p_time_fn(ros_model_code: RateOfSpreadModel) -> Any:
     """Select a rate-of-spread model by code.
 
     Returns a function with signature `(v0, dem_from, dem_to,
@@ -108,23 +107,20 @@ def get_p_time_fn(ros_model_code: ROS_model_literal) -> PTimeFn:
     raise ValueError(f"Unknown ros_model_code: {ros_model_code!r}")
 
 
-def get_p_moist_fn(moist_model_code: Moisture_model_literal) -> PMoistFn:
+def get_p_moisture_fn(moist_model_code: MoistureModel) -> Any:
     """Select a moisture probability correction by code."""
     match moist_model_code:
-        case "default":
-            return moist_proba_correction_1
-        case "new_formulation":
-            return moist_proba_correction_1
+        case "trucchia":
+            return p_moisture_trucchia
         case "rothermel":
-            return moist_proba_correction_2
+            return p_moisture_rothermel
 
     raise ValueError(f"Unknown moist_model_code: {moist_model_code!r}")
 
-
+@jit(cache=True)
 def p_time_rothermel(
-    v0: npt.NDArray[np.integer],
-    dem_from: float,
-    dem_to: float,
+    v0: float,
+    dh: float,
     angle_to: float,
     dist: float,
     moist: float,
@@ -135,26 +131,26 @@ def p_time_rothermel(
 
     Parameters
     ----------
-    dem_from, dem_to : numpy.ndarray
-        Elevation at source and neighbor cells.
-    angle_to : numpy.ndarray
+    v0 : float
+        Base ROS vector per vegetation type.
+    dh : float
+        Elevation difference between source and neighbor cells.
+    angle_to : float
         Direction to neighbor (radians).
-    dist : numpy.ndarray
+    dist : float
         Lattice distance to neighbor (cells).
-    moist : numpy.ndarray
+    moist : float
         Moisture values (%).
-    w_dir : numpy.ndarray
+    w_dir : float
         Wind direction (radians).
-    w_speed : numpy.ndarray
+    w_speed : float
         Wind speed (km/h).
 
     Returns
     -------
-    tuple[numpy.ndarray, numpy.ndarray]
+    tuple[float, float]
         (transition time [min], ROS [m/min]).
     """
-    # velocità di base modulata con la densità(tempo di attraversamento)
-    dh = dem_to - dem_from
 
     real_dist = np.sqrt((CELLSIZE * dist) ** 2 + dh**2)
 
@@ -188,7 +184,7 @@ def p_time_rothermel(
     t = real_dist / v_wh
 
     return t, v_wh
-    # return t
+
 
 
 @jit(cache=True)
@@ -258,10 +254,10 @@ def p_time_wang(
     return t, v_wh
 
 
+@jit(cache=True)
 def p_time_standard(
     v0: float,
-    dem_from: float,
-    dem_to: float,
+    dh: float,
     angle_to: float,
     dist: float,
     moist: float,
@@ -272,27 +268,26 @@ def p_time_standard(
 
     Parameters
     ----------
-    v0 : numpy.ndarray
+    v0 : float
         Base ROS vector per vegetation type.
-    dem_from, dem_to : numpy.ndarray
-        Elevation at source and neighbor cells.
-    angle_to : numpy.ndarray
+    dh : float
+        Elevation difference between source and neighbor cells.
+    angle_to : float
         Direction to neighbor (radians).
-    dist : numpy.ndarray
+    dist : float
         Lattice distance to neighbor (cells).
-    moist : numpy.ndarray
+    moist : float
         Moisture values (%).
-    w_dir : numpy.ndarray
+    w_dir : float
         Wind direction (radians).
-    w_speed : numpy.ndarray
+    w_speed : float
         Wind speed (km/h).
 
     Returns
     -------
-    tuple[numpy.ndarray, numpy.ndarray]
+    tuple[float, float]
         (transition time [min], ROS [m/min]).
     """
-    dh = dem_to - dem_from
     wh = w_h_effect(angle_to, w_speed, w_dir, dh, dist)
     moist_eff = np.exp(C_MOIST * moist)  # moisture effect
 
@@ -360,7 +355,7 @@ def w_h_effect_on_probability(
 
 
 @jit(cache=True)
-def moist_proba_correction_1(
+def p_moisture_trucchia(
     moist: float,
 ) -> float:
     """
@@ -382,8 +377,8 @@ def moist_proba_correction_1(
     p_moist = clip(p_moist, 0.0, 1.0)
     return p_moist
 
-
-def moist_proba_correction_2(
+@jit(cache=True)
+def p_moisture_rothermel(
     moist: float,
 ) -> float:
     """
@@ -502,9 +497,10 @@ def get_probability_to_neighbour(
     moisture_r: float,
     dh: float,
     transition_probability: float,
+    p_moist_fn: Any
 ) -> float:
     # get the probability for all the pixels
-    moisture_effect = moist_proba_correction_1(moisture_r)  # type: ignore
+    moisture_effect = p_moist_fn(moisture_r)  # type: ignore
     alpha_wh = w_h_effect_on_probability(
         angle_to, w_speed_r, w_dir_r, dh, dist_to
     )
@@ -526,11 +522,12 @@ def calculate_fire_behavior(
     moisture_r: float,
     w_dir_r: float,
     w_speed_r: float,
+    p_time_fn: Any
 ) -> tuple[int, float, float]:
     # get the propagation time for the propagating pixels
     # transition_time = p_time(dem_from[p], dem_to[p],
 
-    transition_time, ros_value = p_time_wang(
+    transition_time, ros_value = p_time_fn(
         fuel_from.v0 / 60,  # m/min!!!
         dh,
         angle_to,
@@ -649,6 +646,8 @@ def apply_single_update(
     wind_dir: npt.NDArray[np.floating],
     wind_speed: npt.NDArray[np.floating],
     fuels: FuelSystem,
+    p_time_fn: Any,
+    p_moist_fn: Any
 ) -> list[tuple[int, int, int, float, float]]:
     fire_spread_updates = []
 
@@ -689,6 +688,7 @@ def apply_single_update(
             moisture_r,  # type: ignore
             dh,
             transition_probability,
+            p_moist_fn
         )
 
         do_propagate = p_prob > random()
@@ -706,6 +706,7 @@ def apply_single_update(
             moisture_r,  # type: ignore
             w_dir_r,
             w_speed_r,
+            p_time_fn
         )
         fire_spread_updates.append(
             (transition_time, row_to, col_to, ros, fireline_intensity)
@@ -739,6 +740,8 @@ def next_updates_fn(
     wind_dir: npt.NDArray[np.floating],
     wind_speed: npt.NDArray[np.floating],
     fuels: FuelSystem,
+    p_time_fn: Any,
+    p_moist_fn: Any
 ) -> UpdateBatchTuple:
     next_rows = []
     next_cols = []
@@ -762,6 +765,8 @@ def next_updates_fn(
             wind_dir,
             wind_speed,  # type: ignore
             fuels,
+            p_time_fn,
+            p_moist_fn
         )
 
         for fire_spread in fire_spread_update:

@@ -5,8 +5,8 @@ that evolves a fire state over a grid using wind, slope, vegetation, and
 moisture inputs. Public dataclasses capture boundary conditions, actions,
 summary statistics, and output snapshots suitable for CLI and IO layers.
 """
-
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -15,17 +15,15 @@ from propagator.constants import (
     FUEL_SYSTEM_LEGACY,
 )
 from propagator.functions import (
-    get_p_moist_fn,
+    get_p_moisture_fn,
     get_p_time_fn,
     next_updates_fn,
 )
 from propagator.models import (
     BoundaryConditions,
     FuelSystem,
-    PMoistFn,
     PropagatorOutput,
     PropagatorStats,
-    PTimeFn,
     UpdateBatch,
     UpdateBatchWithTime,
 )
@@ -54,8 +52,8 @@ class Propagator:
     fuels: FuelSystem = field(default_factory=lambda: FUEL_SYSTEM_LEGACY)
 
     # selected simulation functions
-    p_time_fn: PTimeFn = field(default=get_p_time_fn("default"))
-    p_moist_fn: PMoistFn = field(default=get_p_moist_fn("default"))
+    p_time_fn: Any = field(default=get_p_time_fn("wang"))
+    p_moist_fn: Any = field(default=get_p_moisture_fn("trucchia"))
 
     # scheduler object
     scheduler: Scheduler = field(init=False)
@@ -234,6 +232,8 @@ class Propagator:
             self.wind_dir,
             self.wind_speed,
             self.fuels,
+            self.p_time_fn,
+            self.p_moist_fn
         )
 
         next_updates = UpdateBatchWithTime.from_tuple(new_updates_tuple)
