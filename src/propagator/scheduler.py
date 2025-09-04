@@ -12,8 +12,8 @@ from typing import Dict, Iterator, List, Optional, Tuple
 import numpy as np
 import numpy.typing as npt
 
+from propagator.constants import NO_FUEL
 from propagator.models import (
-    BoundaryConditions,
     UpdateBatch,
     UpdateBatchWithTime,
 )
@@ -35,6 +35,35 @@ class SchedulerEvent:
     # actions
     additional_moisture: Optional[npt.NDArray[np.floating]] = None
     vegetation_changes: Optional[npt.NDArray[np.floating]] = None
+
+    def update(self, other: SchedulerEvent) -> None:
+        self.updates.extend(other.updates)
+
+        # overwrite boundary_conditions if already set
+        if other.moisture is not None:
+            self.moisture = other.moisture
+
+        if other.wind_dir is not None:
+            self.wind_dir = other.wind_dir
+
+        if other.wind_speed is not None:
+            self.wind_speed = other.wind_speed
+
+        # in this case changes are added
+        if self.additional_moisture is None:
+            if other.additional_moisture is not None:
+                self.additional_moisture = other.additional_moisture
+        elif other.additional_moisture is not None:
+            self.additional_moisture += other.additional_moisture
+
+        if self.vegetation_changes is None:
+            self.vegetation_changes = other.vegetation_changes
+        elif other.vegetation_changes is not None:
+            self.vegetation_changes = np.where(
+                other.vegetation_changes == NO_FUEL,
+                self.vegetation_changes,
+                other.vegetation_changes,
+            )
 
 
 @dataclass(frozen=True)
@@ -128,7 +157,7 @@ class Scheduler:
         time, updates = self._queue.popitem(index=0)
         return time, updates
 
-    def add_boundary_conditions(self, boundary_conditions: BoundaryConditions):
+    def add_event(self, time: int, event: SchedulerEvent):
         """
         Adds a boundary condition to the scheduler.
 
@@ -137,60 +166,12 @@ class Scheduler:
         boundary_conditions : PropagatorBoundaryConditions
             The boundary condition to add at defined time.
         """
-        entry = self._queue.get(boundary_conditions.time, None)
+        entry = self._queue.get(time, None)
         if entry is None:
-            entry = SchedulerEvent()
-            self._queue[boundary_conditions.time] = entry
-        if boundary_conditions.moisture is not None:
-            entry.moisture = boundary_conditions.moisture
-        if boundary_conditions.wind_dir is not None:
-            entry.wind_dir = boundary_conditions.wind_dir
-        if boundary_conditions.wind_speed is not None:
-            entry.wind_speed = boundary_conditions.wind_speed
+            self._queue[time] = event
+        else:
+            entry.update(event)
 
-        if boundary_conditions.ignition_mask is not None:
-            ign_arr = boundary_conditions.ignition_mask
-            points = np.argwhere(ign_arr > 0)
-            realizations = np.arange(self.realizations)
-            points_repeated = np.repeat(points, self.realizations, axis=0)
-            times_repeated = np.repeat(
-                boundary_conditions.time, self.realizations
-            )
-            fireline_intensity = np.zeros_like(
-                points_repeated[:, 0], dtype=np.float32
-            )
-            ros = np.zeros_like(points_repeated[:, 0], dtype=np.float32)
-            self.push_updates(
-                UpdateBatchWithTime(
-                    times=times_repeated,
-                    rows=points_repeated[:, 0],
-                    cols=points_repeated[:, 1],
-                    realizations=realizations,
-                    fireline_intensities=fireline_intensity,
-                    rates_of_spread=ros,
-                )
-            )
-
-        if boundary_conditions.additional_moisture is not None:
-            if entry.additional_moisture is None:
-                entry.additional_moisture = (
-                    boundary_conditions.additional_moisture
-                )
-            else:
-                entry.additional_moisture += (
-                    boundary_conditions.additional_moisture
-                )
-        if boundary_conditions.vegetation_changes is not None:
-            if entry.vegetation_changes is None:
-                entry.vegetation_changes = (
-                    boundary_conditions.vegetation_changes
-                )
-            else:
-                entry.vegetation_changes = np.where(
-                    boundary_conditions.vegetation_changes == 0,
-                    entry.vegetation_changes,
-                    boundary_conditions.vegetation_changes,
-                )
 
     def active(self) -> npt.NDArray[np.integer]:
         arrays = [event.updates.realizations for event in self._queue.values()]

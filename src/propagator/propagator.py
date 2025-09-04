@@ -27,7 +27,7 @@ from propagator.numba import (
     get_p_time_fn,
     next_updates_fn,
 )
-from propagator.scheduler import Scheduler
+from propagator.scheduler import Scheduler, SchedulerEvent
 
 
 @dataclass
@@ -190,7 +190,45 @@ class Propagator:
                 "Boundary conditions cannot be applied in the past.\
                 Please check the time of the boundary conditions."
             )
-        self.scheduler.add_boundary_conditions(boundary_condition)
+
+        event = SchedulerEvent()
+
+        if boundary_condition.moisture is not None:
+            # moisture is given as % we need to transform it to fraction
+            event.moisture = boundary_condition.moisture / 100.0
+        if boundary_condition.wind_dir is not None:
+            # wind direction is given in degrees clockwise, north is 0
+            # we need to transform it to radians, counter-clockwise east is 0
+            wind_dir_radians = np.radians(90 - boundary_condition.wind_dir)
+            wind_dir_norm = (wind_dir_radians + np.pi) % (2 * np.pi) - np.pi
+            event.wind_dir = wind_dir_norm
+        if boundary_condition.wind_speed is not None:
+            # wind speed is given in km/h
+            event.wind_speed = boundary_condition.wind_speed
+        if boundary_condition.additional_moisture is not None:
+            # additional moisture is given as % we need to transform it to fraction
+            event.additional_moisture = boundary_condition.additional_moisture / 100.0
+        if boundary_condition.vegetation_changes is not None:
+            event.vegetation_changes = boundary_condition.vegetation_changes
+
+        if boundary_condition.ignition_mask is not None:
+            ign_arr = boundary_condition.ignition_mask
+            points = np.argwhere(ign_arr > 0)
+            realizations = np.arange(self.realizations)
+            points_repeated = np.repeat(points, self.realizations, axis=0)
+            fireline_intensity = np.zeros_like(
+                points_repeated[:, 0], dtype=np.float32
+            )
+            ros = np.zeros_like(points_repeated[:, 0], dtype=np.float32)
+            event.updates = UpdateBatch(
+                    rows=points_repeated[:, 0],
+                    cols=points_repeated[:, 1],
+                    realizations=realizations,
+                    fireline_intensities=fireline_intensity,
+                    rates_of_spread=ros,
+                )
+
+        self.scheduler.add_event(boundary_condition.time, event)
 
     def apply_updates(
         self,

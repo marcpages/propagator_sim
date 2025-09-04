@@ -1,17 +1,22 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Type, cast, List, Literal, Optional
+from collections import defaultdict
+from enum import Enum
+from functools import lru_cache
+from typing import Any, Iterable, List, Literal, Optional, Type, cast
+
 import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel, Field, field_validator
-from enum import Enum
-from functools import lru_cache
 from scipy import ndimage
-from collections import defaultdict
 
-from propagator_io.geometry import Geometry, GeometryParser
 from propagator_io.geo import GeographicInfo
-from propagator_io.geometry import GeometryKind, rasterize_geometries
+from propagator_io.geometry import (
+    Geometry,
+    GeometryKind,
+    GeometryParser,
+    rasterize_geometries,
+)
 
 
 class ActionType(str, Enum):
@@ -22,12 +27,11 @@ class ActionType(str, Enum):
 
 
 # constants
-# NOTE: fixed moisture values in [0, 1]
-WATERLINE_ACTION_MOIST_VALUE = 0.27
-CANADAIR_MOIST_VALUE = 0.25
-CANADAIR_BUFFER_MOIST_VALUE = 0.22
-HELICOPTER_MOIST_VALUE = 0.22
-HELICOPTER_BUFFER_MOIST_VALUE = 0.2
+WATERLINE_ACTION_MOIST_VALUE = 27
+CANADAIR_MOIST_VALUE = 25
+CANADAIR_BUFFER_MOIST_VALUE = 22
+HELICOPTER_MOIST_VALUE = 22
+HELICOPTER_BUFFER_MOIST_VALUE = 20
 
 
 # ---------- Base class ----------

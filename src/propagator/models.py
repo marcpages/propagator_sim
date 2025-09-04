@@ -137,6 +137,7 @@ class BoundaryConditions:
     vegetation_changes: Optional[npt.NDArray[np.floating]] = None
 
 
+
 @dataclass(frozen=True)
 class PropagatorStats:
     """Summary statistics for the current simulation state."""

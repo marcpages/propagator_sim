@@ -10,12 +10,12 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
 from propagator.propagator import (
     BoundaryConditions,
 )
 
 # ---- project utils ----------------------------------------------------------
-from propagator.utils import normalize
 from propagator_io.actions import Action, parse_actions
 from propagator_io.geo import GeographicInfo
 from propagator_io.geometry import (
@@ -24,11 +24,6 @@ from propagator_io.geometry import (
     GeometryParser,
     rasterize_geometries,
 )
-
-
-# ---- wind helpers -----------------------------------------------------------
-def meteo_deg_to_model_rad(deg: float) -> float:
-    return normalize((180.0 - float(deg) + 90.0) * np.pi / 180.0)
 
 
 # ---- simulation inputs ------------------------------------------------------
@@ -41,12 +36,12 @@ class TimedInput(BaseModel):
 
     # Weather conditions
     w_dir: float = Field(
-        default_factory=lambda: meteo_deg_to_model_rad(0.0),
-        description="wind direction in radians",
-    )  # ????
+        default=0,
+        description="wind direction in degrees from north",
+    )
     w_speed: float = Field(0.0, description="wind speed in km/h")
     moisture: float = Field(
-        0.0, ge=0.0, le=100.0, description="fuel moisture in percent (0-100)"
+        0.0, ge=0.0, le=100.0, description="fuel moisture in percentage (0-100)"
     )
 
     actions: Optional[list[Action]] = None
@@ -64,12 +59,12 @@ class TimedInput(BaseModel):
     @field_validator("w_dir", mode="before")
     @classmethod
     def _coerce_wdir(cls, v):
-        if v is None:
-            return meteo_deg_to_model_rad(0.0)
         x = float(v)
-        if x > 2 * np.pi or x < -2 * np.pi:
-            return meteo_deg_to_model_rad(x)
-        return normalize(x)
+        if x < 0:
+            x = 360 + (x % 360)
+        elif x >= 360:
+            x = x % 360
+        return x
 
     @field_validator("time")
     @classmethod
