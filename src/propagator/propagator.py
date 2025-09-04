@@ -5,6 +5,7 @@ that evolves a fire state over a grid using wind, slope, vegetation, and
 moisture inputs. Public dataclasses capture boundary conditions, actions,
 summary statistics, and output snapshots suitable for CLI and IO layers.
 """
+
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -233,7 +234,7 @@ class Propagator:
             self.wind_speed,
             self.fuels,
             self.p_time_fn,
-            self.p_moist_fn
+            self.p_moist_fn,
         )
 
         next_updates = UpdateBatchWithTime.from_tuple(new_updates_tuple)

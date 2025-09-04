@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 import numpy as np
 import numpy.typing as npt
-from numba import jit, typed, types
+from numba import jit
 from numpy.random import normal, poisson, random, uniform
 
 from propagator.constants import (
@@ -48,10 +48,7 @@ from propagator.models import (
 )
 
 RateOfSpreadModel = Literal["default", "wang", "rothermel"]
-MoistureModel = Literal[
-    "default", "trucchia", "rothermel"
-]
-
+MoistureModel = Literal["default", "trucchia", "rothermel"]
 
 
 @jit(cache=True)
@@ -116,6 +113,7 @@ def get_p_moisture_fn(moist_model_code: MoistureModel) -> Any:
             return p_moisture_rothermel
 
     raise ValueError(f"Unknown moist_model_code: {moist_model_code!r}")
+
 
 @jit(cache=True)
 def p_time_rothermel(
@@ -184,7 +182,6 @@ def p_time_rothermel(
     t = real_dist / v_wh
 
     return t, v_wh
-
 
 
 @jit(cache=True)
@@ -377,6 +374,7 @@ def p_moisture_trucchia(
     p_moist = clip(p_moist, 0.0, 1.0)
     return p_moist
 
+
 @jit(cache=True)
 def p_moisture_rothermel(
     moist: float,
@@ -497,7 +495,7 @@ def get_probability_to_neighbour(
     moisture_r: float,
     dh: float,
     transition_probability: float,
-    p_moist_fn: Any
+    p_moist_fn: Any,
 ) -> float:
     # get the probability for all the pixels
     moisture_effect = p_moist_fn(moisture_r)  # type: ignore
@@ -522,7 +520,7 @@ def calculate_fire_behavior(
     moisture_r: float,
     w_dir_r: float,
     w_speed_r: float,
-    p_time_fn: Any
+    p_time_fn: Any,
 ) -> tuple[int, float, float]:
     # get the propagation time for the propagating pixels
     # transition_time = p_time(dem_from[p], dem_to[p],
@@ -647,7 +645,7 @@ def apply_single_update(
     wind_speed: npt.NDArray[np.floating],
     fuels: FuelSystem,
     p_time_fn: Any,
-    p_moist_fn: Any
+    p_moist_fn: Any,
 ) -> list[tuple[int, int, int, float, float]]:
     fire_spread_updates = []
 
@@ -688,7 +686,7 @@ def apply_single_update(
             moisture_r,  # type: ignore
             dh,
             transition_probability,
-            p_moist_fn
+            p_moist_fn,
         )
 
         do_propagate = p_prob > random()
@@ -706,7 +704,7 @@ def apply_single_update(
             moisture_r,  # type: ignore
             w_dir_r,
             w_speed_r,
-            p_time_fn
+            p_time_fn,
         )
         fire_spread_updates.append(
             (transition_time, row_to, col_to, ros, fireline_intensity)
@@ -741,7 +739,7 @@ def next_updates_fn(
     wind_speed: npt.NDArray[np.floating],
     fuels: FuelSystem,
     p_time_fn: Any,
-    p_moist_fn: Any
+    p_moist_fn: Any,
 ) -> UpdateBatchTuple:
     next_rows = []
     next_cols = []
@@ -766,7 +764,7 @@ def next_updates_fn(
             wind_speed,  # type: ignore
             fuels,
             p_time_fn,
-            p_moist_fn
+            p_moist_fn,
         )
 
         for fire_spread in fire_spread_update:

@@ -32,7 +32,7 @@ ignition_array[100:101, 100:101] = 1
 boundary_conditions_list: list[BoundaryConditions] = [
     BoundaryConditions(
         time=0,
-        ignition_mask=ignition_array,           # type: ignore
+        ignition_mask=ignition_array,  # type: ignore
         wind_speed=np.ones(dem.shape) * 10,
         wind_dir=np.ones(dem.shape) * 180,
         moisture=np.ones(dem.shape) * 0.05,

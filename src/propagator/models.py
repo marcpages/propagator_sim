@@ -343,5 +343,3 @@ class PropagatorOutput:
     fli_mean: npt.NDArray[np.floating]
     fli_max: npt.NDArray[np.floating]
     stats: PropagatorStats
-
-
