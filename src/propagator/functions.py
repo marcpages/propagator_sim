@@ -5,7 +5,7 @@ modulators for wind/slope/moisture, fire spotting distance, and fireline
 intensity utilities used by the core propagator.
 """
 
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -48,7 +48,7 @@ from propagator.models import (
 )
 
 RateOfSpreadModel = Literal["default", "wang", "rothermel"]
-MoistureModel = Literal["default", "trucchia", "rothermel"]
+MoistureModel = Literal["default", "trucchia", "baghino"]
 
 
 @jit(cache=True)
@@ -109,8 +109,8 @@ def get_p_moisture_fn(moist_model_code: MoistureModel) -> Any:
     match moist_model_code:
         case "trucchia":
             return p_moisture_trucchia
-        case "rothermel":
-            return p_moisture_rothermel
+        case "baghino":
+            return p_moisture_baghino
 
     raise ValueError(f"Unknown moist_model_code: {moist_model_code!r}")
 
@@ -119,7 +119,7 @@ def get_p_moisture_fn(moist_model_code: MoistureModel) -> Any:
 def p_time_rothermel(
     v0: float,
     dh: float,
-    angle_to: float,
+    angle: float,
     dist: float,
     moist: float,
     w_dir: float,
@@ -133,7 +133,7 @@ def p_time_rothermel(
         Base ROS vector per vegetation type.
     dh : float
         Elevation difference between source and neighbor cells.
-    angle_to : float
+    angle : float
         Direction to neighbor (radians).
     dist : float
         Lattice distance to neighbor (cells).
@@ -150,14 +150,14 @@ def p_time_rothermel(
         (transition time [min], ROS [m/min]).
     """
 
-    real_dist = np.sqrt((CELLSIZE * dist) ** 2 + dh**2)
+    real_dist = np.sqrt(dist ** 2 + dh**2)
 
     # wind component in propagation direction
-    w_proj = np.cos(w_dir - angle_to)
+    w_proj = np.cos(w_dir - angle)
     # wind speed in the direction of propagation
     w_spd = (w_speed * w_proj) / 3.6
 
-    teta_s_rad = np.arctan(dh / CELLSIZE * dist)  # slope angle [rad]
+    teta_s_rad = np.arctan(dh / dist)  # slope angle [rad]
     teta_s = np.degrees(teta_s_rad)  # slope angle [°]
 
     # flame angle measured from the vertical
@@ -188,7 +188,7 @@ def p_time_rothermel(
 def p_time_wang(
     v0: float,
     dh: float,
-    angle_to: float,
+    angle: float,
     dist: float,
     moist: float,
     w_dir: float,
@@ -202,7 +202,7 @@ def p_time_wang(
         Base ROS vector per vegetation type.
     dem_from, dem_to : numpy.ndarray
         Elevation at source and neighbor cells.
-    angle_to : numpy.ndarray
+    angle : numpy.ndarray
         Direction to neighbor (radians).
     dist : numpy.ndarray
         Lattice distance to neighbor (cells).
@@ -220,14 +220,14 @@ def p_time_wang(
     """
     # velocità di base modulata con la densità(tempo di attraversamento)
 
-    real_dist = np.sqrt((CELLSIZE * dist) ** 2 + dh**2)
+    real_dist = np.sqrt(dist ** 2 + dh**2)
 
     # wind component in propagation direction
-    w_proj = np.cos(w_dir - angle_to)
+    w_proj = np.cos(w_dir - angle)
     # wind speed in the direction of propagation
     w_spd = (w_speed * w_proj) / 3.6
 
-    teta_s_rad = np.arctan(dh / CELLSIZE * dist)  # slope angle [rad]
+    teta_s_rad = np.arctan(dh / dist)  # slope angle [rad]
     teta_s_pos = np.absolute(teta_s_rad)  # absolute values of slope angle
     # +1 if fire spreads upslope, -1 if fire spreads downslope
     p_reverse = np.sign(dh)
@@ -290,34 +290,48 @@ def p_time_standard(
 
     v_wh = clip(v0 * wh * moist_eff, 0.01, 100)
 
-    real_dist = np.sqrt((CELLSIZE * dist) ** 2 + dh**2)
+    real_dist = np.sqrt(dist ** 2 + dh**2)
     t = real_dist / v_wh
     return t, v_wh
 
 
 @jit(cache=True)
 def w_h_effect(
-    angle_to: float,
+    angle: float,
     w_speed: float,
     w_dir: float,
     dh: float,
     dist: float,
 ) -> float:
-    """Combined wind and slope multiplicative factor on ROS.
+    """
+    Scale factor taking into account wind, slope and aspect effects on propagation rate of spread.
+
+    Parameters
+    ----------
+    angle : float
+        The angle to the neighboring pixel (units: radians between [-π, π], 0 is east->west).
+    w_speed : float
+        The wind speed (units: km/h).
+    w_dir : float
+        The wind direction (units: radians between [-π, π], 0 is east->west).
+    dh : float
+        The elevation difference between source and neighbor cells (units: meters).
+    dist : float
+        The distance to the neighbor (units: meters).
 
     Returns
     -------
-    numpy.ndarray
-        Dimensionless multiplier applied to base ROS.
+    float
+        Scale factor for wind, slope, and aspect effects on propagation rate of spread.
     """
     w_effect_module = (
         A + (D1 * (D2 * np.tanh((w_speed / D3) - D4))) + (w_speed / D5)
     )
     a = (w_effect_module - 1) / 4
     w_effect_on_direction = (
-        (a + 1) * (1 - a**2) / (1 - a * np.cos(normalize(w_dir - angle_to)))
+        (a + 1) * (1 - a**2) / (1 - a * np.cos(normalize(w_dir - angle)))
     )
-    slope = dh / (CELLSIZE * dist)
+    slope = dh / dist
     h_effect = 2 ** (np.tanh((slope * 3) ** 2.0 * np.sign(slope)))
 
     w_h = h_effect * w_effect_on_direction
@@ -326,22 +340,36 @@ def w_h_effect(
 
 @jit(cache=True)
 def w_h_effect_on_probability(
-    angle_to: float,
+    angle: float,
     w_speed: float,
     w_dir: float,
     dh: float,
-    dist_to: float,
+    dist: float,
 ) -> float:
-    """Scale the wind/slope factor for use as probability exponent.
+    """
+    Scale factor taking into account wind, slope and aspect effects on probability.
+    This is derived from `w_h_effect` by scaling the output non linearly.
+
+    Parameters
+    ----------
+    angle : float
+        The angle to the neighboring pixel (units: radians between [-π, π], 0 is east->west).
+    w_speed : float
+        The wind speed (units: km/h).
+    w_dir : float
+        The wind direction (units: radians between [-π, π], 0 is east->west).
+    dh : float
+        The elevation difference between source and neighbor cells (units: meters).
+    dist : float
+        The distance to the neighbor (units: meters).
 
     Returns
     -------
-    numpy.ndarray
-        Positive factor used as an exponent on the vegetation probability term;
-        values > 1 increase spread, < 1 decrease it.
+    float
+        Scale factor for wind, slope, and aspect effects on probability.
     """
     w_speed_norm = clip(w_speed, 0, 60)
-    wh_orig = w_h_effect(angle_to, w_speed_norm, w_dir, dh, dist_to)
+    wh_orig = w_h_effect(angle, w_speed_norm, w_dir, dh, dist)
     wh = wh_orig - 1.0
     if wh > 0:
         wh = wh / 2.13
@@ -360,9 +388,20 @@ def p_moisture_trucchia(
 
     Uses a 5th-degree polynomial in x = moist/Mx, with Mx = 0.3
     (Trucchia et al., Fire 2020).
+
+    Parameters
+    ----------
+    moist : float
+        Moisture content (fractional).
+
+    Returns
+    -------
+    float
+        Moisture correction factor (p_{i,j}).
+
     """
     Mx = 0.3
-    x = clip(moist, 0.0, 1.0) / Mx
+    x = moist / Mx
     p_moist = (
         (-11.507 * x**5)
         + (22.963 * x**4)
@@ -376,13 +415,23 @@ def p_moisture_trucchia(
 
 
 @jit(cache=True)
-def p_moisture_rothermel(
+def p_moisture_baghino(
     moist: float,
 ) -> float:
     """
-    Moisture correction to p_{i,j}
-    (older formulation, Baghino; Trucchia et al., 2020).
+    Moisture correction to p_{i,j}.
+    Older formulation, Baghino; Trucchia et al., 2020).
     Parameters come from constants.
+
+    Parameters
+    ----------
+    moist : float
+        Moisture content (fractional).
+
+    Returns
+    -------
+    float
+        Moisture correction factor (p_{i,j}).
     """
     p_moist = M1 * moist**3 + M2 * moist**2 + M3 * moist + M4
     return p_moist
@@ -490,17 +539,45 @@ def fireline_intensity(
 def get_probability_to_neighbour(
     angle_to: float,
     dist_to: float,
-    w_dir_r: float,
-    w_speed_r: float,
-    moisture_r: float,
+    w_dir: float,
+    w_speed: float,
+    moisture: float,
     dh: float,
     transition_probability: float,
     p_moist_fn: Any,
 ) -> float:
-    # get the probability for all the pixels
-    moisture_effect = p_moist_fn(moisture_r)  # type: ignore
+    """
+    Get the probability of fire spread to a neighboring pixel.
+
+    Parameters
+    ----------
+    angle_to: float
+        The angle to the neighboring pixel (units: radians between [-π, π], 0 is east->west).
+    dist_to: float
+        The distance to the neighboring pixel (units: meters).
+    w_dir: float
+        The wind direction (units: radians between [-π, π], 0 is east->west).
+    w_speed: float
+        The wind speed (units: km/h).
+    moisture: float
+        The moisture content (units: fraction).
+    dh: float
+        The difference in height (units: meters).
+    transition_probability: float
+        The base transition probability.
+    p_moist_fn: Any
+        The function to compute the moisture probability (must be jit-compiled). Units are compliant with other functions.
+            signature: (moist: float) -> float
+
+    Returns
+    -------
+    float
+        The probability of fire spread to the neighboring pixel.
+    """
+
+    moisture_effect = p_moist_fn(moisture)
     alpha_wh = w_h_effect_on_probability(
-        angle_to, w_speed_r, w_dir_r, dh, dist_to
+        angle_to, w_speed, w_dir, dh, dist_to
     )
 
     alpha_wh = np.maximum(alpha_wh, 0)  # prevent alpha < 0
@@ -558,6 +635,7 @@ def calculate_fire_behavior(
 def compute_spotting(
     row: int,
     col: int,
+    cellsize: float,
     veg: npt.NDArray[np.integer],
     fire: npt.NDArray[np.int8],
     wind_dir: float,
@@ -585,7 +663,7 @@ def compute_spotting(
         )
 
         # filter out short embers
-        if ember_distance < 2 * CELLSIZE:
+        if ember_distance < 2 * cellsize:
             continue
 
         # calculate landing locations
@@ -595,8 +673,8 @@ def compute_spotting(
         delta_c = ember_distance * np.sin(ember_angle)
 
         # location of the cell to be ignited by the ember
-        row_to = row + int(delta_r / CELLSIZE)
-        col_to = col + int(delta_c / CELLSIZE)
+        row_to = row + int(delta_r / cellsize)
+        col_to = col + int(delta_c / cellsize)
 
         # check if the landing location is within the grid, otherwise discard
         if col_to < 0 or col_to > fire.shape[1] - 1:
@@ -637,6 +715,7 @@ def compute_spotting(
 def apply_single_update(
     row: int,
     col: int,
+    cellsize: float,
     veg: npt.NDArray[np.integer],
     dem: npt.NDArray[np.floating],
     fire: npt.NDArray[np.int8],
@@ -647,6 +726,43 @@ def apply_single_update(
     p_time_fn: Any,
     p_moist_fn: Any,
 ) -> list[tuple[int, int, int, float, float]]:
+    """
+    Apply fire spread to a single cell and get the next spread updates.
+
+    Parameters
+    ----------
+    row : int
+        The row index of the current cell
+    col : int
+        The column index of the current cell
+    cellsize: float
+        The size of each cell (in meters)
+    veg : npt.NDArray[np.integer]
+        The 2D vegetation array
+    dem : npt.NDArray[np.floating]
+        The 2D digital elevation model array
+    fire: npt.NDArray[np.int8]
+        The 2D current fire state
+    moisture: npt.NDArray[np.floating]
+        The 2D moisture array (units: fraction [0, 1])
+    wind_dir: npt.NDArray[np.floating]
+        The 2D wind direction array (units: radians between [-π, π], 0 is east->west)
+    wind_speed: npt.NDArray[np.floating]
+        The 2D wind speed array (units: km/h)
+    fuels: FuelSystem
+        The fuel system
+    p_time_fn: Any
+        The function to compute the spread time (must be jit-compiled). Units are compliant with other functions.
+            signature: (v0: float, dh: float, angle_to: float, dist: float, moist: float, w_dir: float, w_speed: float) -> tuple[float, float]
+    p_moist_fn: Any
+        The function to compute the moisture probability (must be jit-compiled). Units are compliant with other functions.
+            signature: (moist: float) -> float
+
+    Returns
+    -------
+    list[tuple[int, int, int, float, float]]
+        A list of fire spread updates (transition_times, rows, cols, rates_of_spread, fireline_intensities)
+    """
     fire_spread_updates = []
 
     dem_from = dem[row, col]
@@ -660,12 +776,13 @@ def apply_single_update(
 
     fuel_from = fuels.get_fuel(veg_from)  # type: ignore
 
-    for neighbour, dist_to, angle_to in zip(
+    for neighbour, dist_to_lattice, angle_to in zip(
         NEIGHBOURS, NEIGHBOURS_DISTANCE, NEIGHBOURS_ANGLE
     ):
         row_to = row + neighbour[0]
         col_to = col + neighbour[1]
         veg_to = veg[row_to, col_to]
+        dist_to = dist_to_lattice * cellsize
 
         # keep only pixels where fire can spread
         if fire[row_to, col_to] != 0 or veg_to == NO_FUEL:
@@ -714,6 +831,7 @@ def apply_single_update(
         spotting_updates = compute_spotting(
             row,
             col,
+            cellsize,
             veg,
             fire,
             wind_dir[row, col],
@@ -730,6 +848,7 @@ def next_updates_fn(
     rows: npt.NDArray[np.integer],
     cols: npt.NDArray[np.integer],
     realizations: npt.NDArray[np.integer],
+    cellsize: float,
     time: int,
     veg: npt.NDArray[np.integer],
     dem: npt.NDArray[np.floating],
@@ -741,6 +860,48 @@ def next_updates_fn(
     p_time_fn: Any,
     p_moist_fn: Any,
 ) -> UpdateBatchTuple:
+    """
+    Compute the next updates for the fire spread simulation.
+
+    Parameters
+    ----------
+    rows: npt.NDArray[np.integer]
+        The row indices of the fire spread updates.
+    cols: npt.NDArray[np.integer]
+        The column indices of the fire spread updates.
+    realizations: npt.NDArray[np.integer]
+        The realization indices of the fire spread updates.
+    cellsize: float
+        The size of each cell (in meters)
+    time: int
+        The current time step.
+    veg : npt.NDArray[np.integer]
+        The 2D vegetation array
+    dem : npt.NDArray[np.floating]
+        The 2D digital elevation model array
+    fire: npt.NDArray[np.int8]
+        The 3D current fire state
+    moisture: npt.NDArray[np.floating]
+        The 2D moisture array (units: fraction [0, 1])
+    wind_dir: npt.NDArray[np.floating]
+        The 2D wind direction array (units: radians between [-π, π], 0 is east->west)
+    wind_speed: npt.NDArray[np.floating]
+        The 2D wind speed array (units: km/h)
+    fuels: FuelSystem
+        The fuel system
+    p_time_fn: Any
+        The function to compute the spread time (must be jit-compiled). Units are compliant with other functions.
+            signature: (v0: float, dh: float, angle_to: float, dist: float, moist: float, w_dir: float, w_speed: float) -> tuple[float, float]
+    p_moist_fn: Any
+        The function to compute the moisture probability (must be jit-compiled). Units are compliant with other functions.
+            signature: (moist: float) -> float
+
+    Returns
+    -------
+    UpdateBatchTuple
+        A tuple containing the arrays for the next updates.
+        (next_times, next_rows, next_cols, next_realizations, next_ros, next_fireline_intensities)
+    """
     next_rows = []
     next_cols = []
     next_realizations = []
@@ -756,6 +917,7 @@ def next_updates_fn(
         fire_spread_update = apply_single_update(
             row,
             col,
+            cellsize,
             veg,
             dem,
             fire[:, :, realization],

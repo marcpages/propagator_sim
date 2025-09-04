@@ -12,9 +12,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from propagator.constants import (
-    FUEL_SYSTEM_LEGACY,
-)
+from propagator.constants import CELLSIZE, FUEL_SYSTEM_LEGACY
 from propagator.functions import (
     get_p_moisture_fn,
     get_p_time_fn,
@@ -55,6 +53,8 @@ class Propagator:
     # selected simulation functions
     p_time_fn: Any = field(default=get_p_time_fn("wang"))
     p_moist_fn: Any = field(default=get_p_moisture_fn("trucchia"))
+
+    cellsize: float = field(default=CELLSIZE)
 
     # scheduler object
     scheduler: Scheduler = field(init=False)
@@ -225,6 +225,7 @@ class Propagator:
             rows,
             cols,
             realizations,
+            self.cellsize,
             self.time,
             self.veg,
             self.dem,
