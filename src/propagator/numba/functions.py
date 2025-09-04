@@ -44,6 +44,8 @@ C_MOIST = -0.014
 # variable for fireline intensity
 Q = 2442.0
 
+# Moisture of extinction
+MOISTURE_OF_EXTINCTION = 0.3
 
 RateOfSpreadModel = Literal["default", "wang", "rothermel"]
 MoistureModel = Literal["default", "trucchia", "baghino"]
@@ -94,8 +96,15 @@ def normalize(angle_to_norm: float) -> float:
 def get_p_time_fn(ros_model_code: RateOfSpreadModel) -> Any:
     """Select a rate-of-spread model by code.
 
-    Returns a function with signature `(v0, dem_from, dem_to,
-    angle_to, dist, moist, w_dir, w_speed) -> (time, ros)`.
+    Parameters
+    ----------
+    ros_model_code : RateOfSpreadModel
+        The code of the rate-of-spread model to select.
+
+    Returns
+    --------
+        function with signature
+        `(v0, dem_from, dem_to, angle_to, dist, moist, w_dir, w_speed) -> (time, ros)`.
     """
     match ros_model_code:
         case "default":
@@ -109,7 +118,18 @@ def get_p_time_fn(ros_model_code: RateOfSpreadModel) -> Any:
 
 
 def get_p_moisture_fn(moist_model_code: MoistureModel) -> Any:
-    """Select a moisture probability correction by code."""
+    """Select a moisture probability correction by code.
+
+    Parameters
+    ----------
+    moist_model_code : MoistureModel
+        The code of the moisture model to select.
+
+    Returns
+    -------
+        function with signature
+        `(moist: float) -> float`.
+    """
     match moist_model_code:
         case "trucchia":
             return p_moisture_trucchia
@@ -134,17 +154,17 @@ def p_time_rothermel(
     Parameters
     ----------
     v0 : float
-        Base Rate of Spread for the cell vegetation (units: m/min)
+        Base Rate of Spread for the cell vegetation (m/min)
     dh : float
-        Elevation difference between source and neighbor cells. (units: m)
+        Elevation difference between source and neighbor cells. (m)
     angle : float
-        Direction to neighbor (units: radians between [-π, π], 0 is east->west)
+        Direction to neighbor (radians between [-π, π], 0 is east->west)
     dist : float
-        Distance between cells (units: m).
+        Distance between cells (m).
     moist : float
-        Moisture values (units: fraction).
+        Moisture values (fraction).
     w_dir : float
-        Wind direction (units: radians between [-π, π], 0 is east->west).
+        Wind direction (radians between [-π, π], 0 is east->west).
     w_speed : float
         Wind speed (km/h).
 
@@ -313,15 +333,15 @@ def w_h_effect(
     Parameters
     ----------
     angle : float
-        The angle to the neighboring pixel (units: radians between [-π, π], 0 is east->west).
+        The angle to the neighboring pixel (radians between [-π, π], 0 is east->west).
     w_speed : float
-        The wind speed (units: km/h).
+        The wind speed (km/h).
     w_dir : float
-        The wind direction (units: radians between [-π, π], 0 is east->west).
+        The wind direction (radians between [-π, π], 0 is east->west).
     dh : float
-        The elevation difference between source and neighbor cells (units: meters).
+        The elevation difference between source and neighbor cells (meters).
     dist : float
-        The distance to the neighbor (units: meters).
+        The distance to the neighbor (meters).
 
     Returns
     -------
@@ -357,15 +377,15 @@ def w_h_effect_on_probability(
     Parameters
     ----------
     angle : float
-        The angle to the neighboring pixel (units: radians between [-π, π], 0 is east->west).
+        The angle to the neighboring pixel (radians between [-π, π], 0 is east->west).
     w_speed : float
-        The wind speed (units: km/h).
+        The wind speed (km/h).
     w_dir : float
-        The wind direction (units: radians between [-π, π], 0 is east->west).
+        The wind direction (radians between [-π, π], 0 is east->west).
     dh : float
-        The elevation difference between source and neighbor cells (units: meters).
+        The elevation difference between source and neighbor cells (meters).
     dist : float
-        The distance to the neighbor (units: meters).
+        The distance to the neighbor (meters).
 
     Returns
     -------
@@ -402,10 +422,8 @@ def p_moisture_trucchia(
     -------
     float
         Moisture correction factor (p_{i,j}).
-
     """
-    Mx = 0.3
-    x = moist / Mx
+    x = moist / MOISTURE_OF_EXTINCTION
     p_moist = (
         (-11.507 * x**5)
         + (22.963 * x**4)
@@ -461,15 +479,13 @@ def lhv_fuel(
     return lhv
 
 
-
 @jit(cache=True)
 def fireline_intensity(
     d0: float,
     d1: float,
     ros: float,
     lhv_dead_fuel: float,
-    lhv_canopy: float,
-
+    lhv_canopy: float
 ) -> float:
     """
     Estimate fireline intensity (kW/m) from fuel loads and Rate of spread.
@@ -513,17 +529,17 @@ def get_probability_to_neighbour(
     Parameters
     ----------
     angle: float
-        The angle to the neighboring pixel (units: radians between [-π, π], 0 is east->west).
+        The angle to the neighboring pixel (radians between [-π, π], 0 is east->west).
     dist: float
-        The distance to the neighboring pixel (units: meters).
+        The distance to the neighboring pixel (meters).
     w_dir: float
-        The wind direction (units: radians between [-π, π], 0 is east->west).
+        The wind direction (radians between [-π, π], 0 is east->west).
     w_speed: float
-        The wind speed (units: km/h).
+        The wind speed (km/h).
     moisture: float
-        The moisture content (units: fraction).
+        The moisture content (fraction).
     dh: float
-        The difference in height (units: meters).
+        The difference in height (meters).
     transition_probability: float
         The base transition probability.
     p_moist_fn: Any

@@ -62,23 +62,39 @@ NEIGHBOURS_ANGLE = np.array(
 
 @jit(cache=True)
 def fire_spotting(
-    angle_to: float,
+    angle: float,
     w_dir: float,
     w_speed: float,
-) -> float:
-    """Evaluate spotting distance using Alexandridis' formulation."""
+) -> tuple[float, float]:
+    """Evaluate spotting distance using Alexandridis' formulation.
+
+    Parameters
+    ----------
+    angle : float
+        The angle of the ember's trajectory (radians between [-π, π], 0 is east->west)
+    w_dir : float
+        The wind direction (radians between [-π, π], 0 is east->west)
+    w_speed : float
+        The wind speed (km/h)
+
+    Returns
+    -------
+    tuple[float, float]
+        The spotting distance (meters) and the landing time (minutes)
+    """
     r_n = normal(
         SPOTTING_RN_MEAN, SPOTTING_RN_STD
     )  # main thrust of the ember: sampled from a
     # Gaussian Distribution (Alexandridis et al, 2008 and 2011)
     w_speed_ms = w_speed / 3.6  # wind speed [m/s]
     # Alexandridis' formulation for spotting distance
-    d_p = r_n * np.exp(
+    ember_distance = r_n * np.exp(
         w_speed_ms
         * FIRE_SPOTTING_DISTANCE_COEFFICIENT
-        * (np.cos(w_dir - angle_to) - 1)
+        * (np.cos(w_dir - angle) - 1)
     )
-    return d_p
+    ember_landing_time_min = int(ember_distance / w_speed_ms / 60)
+    return ember_distance, ember_landing_time_min
 
 
 
@@ -103,15 +119,15 @@ def compute_spotting(
     col : int
         The column index of the current cell
     cellsize : float
-        The size of each cell (in meters)
+        The size of each cell (m)
     veg : npt.NDArray[np.integer]
         The vegetation type array
     fire : npt.NDArray[np.int8]
         The fire state array
     wind_dir : float
-        The wind direction (in radians)
+        The wind direction (radians between [-π, π], 0 is east->west)
     wind_speed : float
-        The wind speed (in m/s)
+        The wind speed (km/h)
     fuels : FuelSystem
         The fuel system object
 
@@ -136,7 +152,7 @@ def compute_spotting(
         # calculate distance > depends on wind speed and direction
         # NOTE: it is computed considering wind speed and direction
         # of the cell of origin of the ember
-        ember_distance = fire_spotting(
+        ember_distance, ember_landing_time = fire_spotting(
             ember_angle,
             wind_dir,
             wind_speed,
@@ -182,10 +198,10 @@ def compute_spotting(
         if uniform() > P_c:
             continue
 
-        transition_time = int(ember_distance / wind_speed)
-        transition_time = max(transition_time, 1)
+        
+        ember_landing_time = max(ember_landing_time, 1)
 
-        spotting_update = (transition_time, row_to, col_to, np.nan, np.nan)
+        spotting_update = (ember_landing_time, row_to, col_to, np.nan, np.nan)
         spotting_updates.append(spotting_update)
 
     return spotting_updates
@@ -196,33 +212,60 @@ def calculate_fire_behavior(
     fuel_from: Fuel,
     fuel_to: Fuel,
     dh: float,
-    dist_to: float,
-    angle_to: float,
-    moisture_r: float,
-    w_dir_r: float,
-    w_speed_r: float,
+    dist: float,
+    angle: float,
+    moisture: float,
+    w_dir: float,
+    w_speed: float,
     p_time_fn: Any,
 ) -> tuple[int, float, float]:
-    # get the propagation time for the propagating pixels
-    # transition_time = p_time(dem_from[p], dem_to[p],
+    """ Calculate fire behaviour during propagation between cells
+
+    Parameters
+    ----------
+    fuel_from : Fuel
+        The fuel object for the source cell.
+    fuel_to : Fuel
+        The fuel object for the target cell.
+    dh : float
+        The elevation difference between the source and target cells (m).
+    dist : float
+        The distance to the target cell (m).
+    angle : float
+        The angle to the target cell (radians between [-π, π], 0 is east->west).
+    moisture : float
+        The moisture content of the fuel (fraction).
+    w_dir : float
+        The wind direction (radians between [-π, π], 0 is east->west).
+    w_speed : float
+        The wind speed (km/h).
+    p_time_fn : Any
+        The function to compute the propagation time.
+
+    Returns
+    -------
+    tuple[int, float, float]
+        A tuple containing the transition time, rate of spread, and fireline intensity.
+    """
 
     transition_time, ros_value = p_time_fn(
-        fuel_from.v0 / 60,  # m/min!!!
+        fuel_from.v0,
         dh,
-        angle_to,
-        dist_to,
-        moisture_r,  # type: ignore
-        w_dir_r,
-        w_speed_r,
+        angle,
+        dist,
+        moisture,
+        w_dir,
+        w_speed,
     )
+
     transition_time = int(transition_time)
     if transition_time < 1:
         transition_time = 1
 
     # evaluate LHV of dead fuel
-    lhv_dead_fuel_value = lhv_fuel(fuel_to.hhv, moisture_r)  # type: ignore
+    lhv_dead_fuel_value = lhv_fuel(fuel_to.hhv, moisture)
     # evaluate LHV of the canopy
-    lhv_canopy_value = lhv_fuel(fuel_to.hhv, fuel_to.humidity/100)
+    lhv_canopy_value = lhv_fuel(fuel_to.hhv, fuel_to.humidity)
     # evaluate fireline intensity
     fireline_intensity_value = fireline_intensity(
         fuel_to.d0,

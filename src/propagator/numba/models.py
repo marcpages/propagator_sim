@@ -37,6 +37,30 @@ class Fuel:
         prob_ign_by_embers: float = 0.0,
         burn: bool = True,
     ):
+        """
+        Initialize a Fuel object.
+
+        Parameters
+        ----------
+        v0 : float
+            The initial spread rate (m/min)
+        d0 : float
+            The dead fuel density (kg/m^2)
+        d1 : float
+            The live fuel density (kg/m^2)
+        hhv : float
+            The higher heating value (KJ/kg)
+        humidity : float
+            The fuel moisture content (fraction)
+        name : str
+            The name of the fuel type
+        spotting : bool, optional
+            Whether the fuel type is prone to spotting (default is False)
+        prob_ign_by_embers : float, optional
+            The probability of ignition by embers (default is 0.0)
+        burn : bool, optional
+            Whether the fuel type is combustible (default is True)
+        """
         self.v0 = v0
         self.d0 = d0
         self.d1 = d1
@@ -115,6 +139,32 @@ class FuelSystem:
         prob_ign_by_embers: float = 0.0,
         burn: bool = True,
     ) -> None:
+        """
+        Adds a Fuel object to the FuelSystem.
+
+        Parameters
+        ----------
+        fuel_id : int
+            The unique identifier for the fuel type
+        name : str
+            The name of the fuel type
+        v0 : float
+            The initial spread rate (m/min)
+        d0 : float
+            The dead fuel density (kg/m^2)
+        d1 : float
+            The live fuel density (kg/m^2)
+        hhv : float
+            The higher heating value (KJ/kg)
+        humidity : float
+            The fuel moisture content (fraction)
+        spotting : bool, optional
+            Whether the fuel type is prone to spotting (default is False)
+        prob_ign_by_embers : float, optional
+            The probability of ignition by embers (default is 0.0)
+        burn : bool, optional
+            Whether the fuel type is combustible (default is True)
+        """
         n = len(self.fuels_id.keys())
         if fuel_id in self.fuels_id:
             raise PropagatorError(f"Fuel ID {fuel_id} already exists.")
@@ -166,11 +216,11 @@ def fuelsystem_from_dict(fuels: dict[int, dict]) -> FuelSystem:
         fuelsystem.add_fuel(
             k,
             fuel["name"],
-            fuel["v0"],
+            fuel["v0"] / 60,            # converts from m/h to m/min
             fuel["d0"],
             fuel["d1"],
             fuel["hhv"],
-            fuel["humidity"],
+            fuel["humidity"] / 100,     # converts from percentage to fraction
             fuel.get("spotting", False),
             fuel.get("prob_ign_by_embers", 0.0),
             fuel.get("burn", True),

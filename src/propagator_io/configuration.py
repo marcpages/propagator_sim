@@ -16,12 +16,12 @@ from pydantic import (
     model_validator,
 )
 
-from propagator.numba import FUEL_SYSTEM_LEGACY, fuelsystem_from_dict
-
 # ---- project utils ----------------------------------------------------------
 from propagator.numba import (
+    FUEL_SYSTEM_LEGACY,
     MoistureModel,
     RateOfSpreadModel,
+    fuelsystem_from_dict,
     get_p_moisture_fn,
     get_p_time_fn,
 )
