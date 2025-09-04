@@ -10,9 +10,11 @@ import utm
 
 from propagator.models import PropagatorError
 from propagator_io.geo import GeographicInfo
-from propagator_io.input import PropagatorDataLoaderException
 
-from .protocol import PropagatorInputDataProtocol
+from .protocol import (
+    PropagatorDataLoaderException,
+    PropagatorInputDataProtocol,
+)
 
 DEFAULT_TILES_TAG = "default"
 

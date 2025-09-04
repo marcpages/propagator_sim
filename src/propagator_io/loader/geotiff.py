@@ -1,12 +1,14 @@
-from attr import dataclass
-import numpy as np
-import rasterio as rio
-from propagator_io.geo import GeographicInfo
-from propagator_io.input import PropagatorDataLoaderException
-
 import logging
 
-from propagator_io.loader.protocol import PropagatorInputDataProtocol
+import numpy as np
+import rasterio as rio
+from attr import dataclass
+
+from propagator_io.geo import GeographicInfo
+from propagator_io.loader.protocol import (
+    PropagatorDataLoaderException,
+    PropagatorInputDataProtocol,
+)
 
 
 def check_input_files_consistency(dem_file, veg_file):
