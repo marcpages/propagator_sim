@@ -238,8 +238,10 @@ def calculate_fire_behavior(
         The wind direction (radians between [-π, π], 0 is east->west).
     w_speed : float
         The wind speed (km/h).
-    p_time_fn : Any
-        The function to compute the propagation time.
+    p_time_fn: Any
+        The function to compute the spread time (must be jit-compiled). Units are compliant with other functions.
+            signature: (v0: float, dh: float, angle_to: float, dist: float, moist: float, w_dir: float, w_speed: float) -> tuple[float, float]
+
 
     Returns
     -------
