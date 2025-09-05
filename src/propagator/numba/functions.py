@@ -222,19 +222,19 @@ def p_time_wang(
 
     Parameters
     ----------
-    v0 : numpy.ndarray
+    v0 : float
         Base ROS vector per vegetation type.
-    dem_from, dem_to : numpy.ndarray
+    dh : float
         Elevation at source and neighbor cells.
-    angle : numpy.ndarray
-        Direction to neighbor (radians).
-    dist : numpy.ndarray
-        Lattice distance to neighbor (cells).
-    moist : numpy.ndarray
-        Moisture values (%).
-    w_dir : numpy.ndarray
-        Wind direction (radians).
-    w_speed : numpy.ndarray
+    angle : float
+        Direction to neighbor (radians between [-π, π], 0 is east->west).
+    dist : float
+        Distance to neighbour cell (m).
+    moist : float
+        Moisture values (fractional).
+    w_dir : float
+        Wind direction (radians between [-π, π], 0 is east->west).
+    w_speed : float
         Wind speed (km/h).
 
     Returns
@@ -279,7 +279,7 @@ def p_time_wang(
 def p_time_standard(
     v0: float,
     dh: float,
-    angle_to: float,
+    angle: float,
     dist: float,
     moist: float,
     w_dir: float,
@@ -293,14 +293,14 @@ def p_time_standard(
         Base ROS vector per vegetation type.
     dh : float
         Elevation difference between source and neighbor cells.
-    angle_to : float
-        Direction to neighbor (radians).
+    angle : float
+        Direction to neighbor (radians between [-π, π], 0 is east->west).
     dist : float
-        Lattice distance to neighbor (cells).
+        Distance to neighbor (m).
     moist : float
         Moisture values (%).
     w_dir : float
-        Wind direction (radians).
+        Wind direction (radians between [-π, π], 0 is east->west).
     w_speed : float
         Wind speed (km/h).
 
@@ -309,7 +309,7 @@ def p_time_standard(
     tuple[float, float]
         (transition time [min], ROS [m/min]).
     """
-    wh = w_h_effect(angle_to, w_speed, w_dir, dh, dist)
+    wh = w_h_effect(angle, w_speed, w_dir, dh, dist)
     moist_eff = np.exp(C_MOIST * moist)  # moisture effect
 
     v_wh = clip(v0 * wh * moist_eff, 0.01, 100)
@@ -472,8 +472,8 @@ def lhv_fuel(
     ----------
     hhv : float
         Higher heating value of dead fuel (kJ/kg).
-    dffm : float
-        Dead fuel moisture content (fractional).
+    moisture : float
+        fuel moisture content (fractional).
     """
     lhv = hhv * (1.0 - moisture) - Q * moisture
     return lhv

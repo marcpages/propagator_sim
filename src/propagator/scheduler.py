@@ -159,12 +159,14 @@ class Scheduler:
 
     def add_event(self, time: int, event: SchedulerEvent):
         """
-        Adds a boundary condition to the scheduler.
+        Adds an event to the scheduler.
 
         Parameters
         ----------
-        boundary_conditions : PropagatorBoundaryConditions
-            The boundary condition to add at defined time.
+        time : int
+            Time for the event
+        event : SchedulerEvent
+            New event structure
         """
         entry = self._queue.get(time, None)
         if entry is None:
