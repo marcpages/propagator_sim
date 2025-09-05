@@ -35,9 +35,31 @@ class Propagator:
     """Stochastic cellular wildfire spread simulator.
 
     PROPAGATOR evolves a binary fire state over a regular grid for a
-    configurable number of realizations. Spread depends on vegetation,
-    topography and environmental drivers (wind, moisture) through
-    pluggable probability and travel-time models.
+    configurable number of realizations. 
+    Spread depends on vegetation, topography and environmental drivers
+    (wind, moisture) through pluggable probability and travel-time functions.
+
+    Attributes
+    ----------
+
+    veg : numpy.ndarray
+        2D array of vegetation codes as defined in the provided FuelSystem
+    dem : numpy.ndarray
+        2D array of elevation values (meters above sea level).
+    realizations : int
+        Number of stochastic realizations to simulate.
+    do_spotting : bool
+        Whether to enable fire-spotting in the model.
+    fuels: FuelSystem
+        Object defining fuels types and fire propagation probability between fuel types
+    p_time_fn: Any
+        The function to compute the spread time (must be jit-compiled). Units are compliant with other functions.
+            signature: (v0: float, dh: float, angle_to: float, dist: float, moist: float, w_dir: float, w_speed: float) -> tuple[float, float]
+    p_moist_fn: Any
+        The function to compute the moisture probability (must be jit-compiled). Units are compliant with other functions.
+            signature: (moist: float) -> float
+    cellsize : float
+        The size of lattice (meters).
     """
 
     # domain parameters for the simulation
@@ -182,7 +204,7 @@ class Propagator:
 
         Parameters
         ----------
-        boundary_condition : PropagatorBoundaryConditions
+        boundary_condition : BoundaryConditions
             Conditions to apply.
         """
         if int(self.time) > boundary_condition.time:
@@ -233,7 +255,7 @@ class Propagator:
     def apply_updates(
         self,
         updates: UpdateBatch,
-    ):
+    ) -> None:
         """Apply a batch of burning updates and schedule new ones.
         Parameters
         ----------
@@ -350,7 +372,7 @@ class Propagator:
 
         Returns:
             PropagatorOutput: Snapshot of fire probability,
-            RoS, intensity, stats.
+                RoS, intensity, stats.
         """
         fire_probability = self.compute_fire_probability()
         ros_max = self.compute_ros_max()

@@ -117,15 +117,26 @@ class PropagatorError(Exception):
 
 @dataclass(frozen=True)
 class BoundaryConditions:
-    """Boundary conditions applied at or after a given time.
+    """
+    Boundary conditions applied at or after a given simulation time.
 
-    - time: Simulation time the conditions refer to.
-    - ignitions: Boolean mask of new ignition points (True ignites).
-    - moisture: Fuel moisture map (%), same shape as vegetation.
-    - wind_dir: Wind direction map (radians, mathematical convention).
-    - wind_speed: Wind speed map (km/h).
-    - additional_moisture: Extra moisture to add to fuel (%), can be sparse.
-    - vegetation_changes: Raster of vegetation type overrides (NaN to skip).
+
+    Attributes
+    ----------
+    time : int
+        Simulation time the conditions refer to.
+    moisture : Optional[npt.NDArray[np.floating]]
+        Fuel moisture map (%).
+    wind_dir : Optional[npt.NDArray[np.floating]]
+        Wind direction map (radians, mathematical convention).
+    wind_speed : Optional[npt.NDArray[np.floating]]
+        Wind speed map (km/h).
+    ignition_mask : Optional[npt.NDArray[np.bool_]]
+        Boolean mask of new ignition points.
+    additional_moisture : Optional[npt.NDArray[np.floating]]
+        Extra moisture to add to fuel (%), can be sparse.
+    vegetation_changes : Optional[npt.NDArray[np.floating]]
+        Raster of vegetation type overrides (NaN to skip).
     """
 
     time: int
