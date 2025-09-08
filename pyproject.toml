@@ -40,6 +40,7 @@ dev = [
     "pyinstrument>=5.1.1",
     "ipython>=9.5.0",
     "notebook>=7.4.5",
+    "pylint>=3.3.8",
 ]
 
 [build-system]
