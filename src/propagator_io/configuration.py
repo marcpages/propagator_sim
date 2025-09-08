@@ -94,10 +94,10 @@ class PropagatorConfigurationLegacy(BaseModel):
     )
     do_spotting: bool = Field(False, description="Spotting option")
     ros_model: RateOfSpreadModel = Field(
-        "default", description="ROS model name"
+        "wang", description="ROS model name"
     )
     prob_moist_model: MoistureModel = Field(
-        "default", description="Moisture model name"
+        "trucchia", description="Moisture model name"
     )
     p_time_fn: Optional[object] = Field(default=None, exclude=True)
     p_moist_fn: Optional[object] = Field(default=None, exclude=True)
