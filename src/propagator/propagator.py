@@ -136,10 +136,7 @@ class Propagator:
         numpy.ndarray
             2D array with mean RoS per cell.
         """
-        RoS_m = np.where(self.ros > 0, self.ros, np.nan)
-        RoS_mean = np.nanmean(RoS_m, axis=2).astype(np.float32)
-        RoS_mean = np.where(RoS_mean > 0, RoS_mean, 0)
-        return RoS_mean
+        return self._compute_variable_mean(self.ros)
 
     def compute_fireline_int_max(self) -> npt.NDArray[np.floating]:
         """Return per-cell maximum fireline intensity across realizations.
@@ -161,10 +158,34 @@ class Propagator:
         numpy.ndarray
             2D array of mean intensity values.
         """
-        fl_I_m = np.where(self.fireline_int > 0, self.fireline_int, np.nan)
-        fl_I_mean = np.nanmean(fl_I_m, axis=2).astype(np.float32)
-        fl_I_mean = np.where(fl_I_mean > 0, fl_I_mean, 0)
-        return fl_I_mean
+        return self._compute_variable_mean(self.fireline_int)
+
+    def _compute_variable_mean(self, the_var: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+        """Generic mean computation for a 3D variable across realizations,
+        ignoring where fire has not spread.
+
+        Parameters
+        ----------
+        the_var : numpy.ndarray
+            3D array with shape (rows, cols, realizations).
+            Variable for which to compute the mean.
+
+        Returns
+        -------
+        numpy.ndarray
+            2D array with mean values where fire has spread; NaN otherwise.
+        """
+
+        mask = self.fire > 0
+
+        # accumulate in float64 to reduce precision loss
+        s = np.sum(np.where(mask, the_var, 0.0), axis=2, dtype=np.float64)
+        c = np.sum(mask, axis=2)
+
+        # mean where count>0; NaN otherwise
+        out = np.full(self.veg.shape, np.nan, dtype=np.float32)
+        np.divide(s, c, out=out, where=c > 0)
+        return out
 
     def compute_stats(
         self, values: npt.NDArray[np.floating]
