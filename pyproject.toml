@@ -1,8 +1,17 @@
 [project]
-name = "propagator"
-version = "0.1.0"
+name = "propagator_sim"
+dynamic = ["version"]
 description = "PROPAGATOR: An Operational Cellular-Automata Based Wildfire Simulator"
+authors = [
+    { name = "Mirko D'Andrea", email = "mirko.dandrea@cimafoundation.org" },
+    { name = "Nicolò Perello", email = "nicolo.perello@cimafoundation.org" },
+    { name = "Andrea Trucchia", email = "andrea.trucchia@cimafoundation.org" },
+]
+license = "EUPL-1.2"
+license-files = ["LICENSE.md"]
 readme = "README.md"
+
+
 requires-python = ">=3.11"
 dependencies = [
     "angles>=2.0",
@@ -44,14 +53,20 @@ dev = [
 ]
 
 [build-system]
-requires = ["setuptools>=64", "wheel"]
+requires = ["setuptools>=80", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+version_file = "src/propagator/version.py"
+
 
 [tool.setuptools]
 package-dir = { "" = "src" }
+include-package-data = false
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
 
 [tool.pytest.ini_options]
 minversion = "8.0"
@@ -67,4 +82,8 @@ select = ["E", "F", "W", "Q", "I"]
 ignore = ["E203", "E501"]
 
 [project.scripts]
-propagator = "propagator_cli.cli:main"
+propagator = "propagator.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/CIMAFoundation/propagator_sim"
+Issues = "https://github.com/CIMAFoundation/propagator_sim/issues"
