@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Optional
 
 from rich.console import Console
-from rich.text import Text
 
 # from rich.table import Table
 from rich.panel import Panel
+from rich.text import Text
 
 # from rich import box
 from rich.traceback import install as rich_traceback_install

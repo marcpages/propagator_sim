@@ -266,7 +266,7 @@ def rasterize_geometries(
     # Prepare shapes in destination CRS
     shapes: List[Tuple[dict, Union[int, float]]] = []
     for i, g in enumerate(geometries):
-        gj = g._shape_rasterize(dst_crs=geo_info.prj.crs)
+        gj = g._shape_rasterize(dst_crs=geo_info.crs)
         val = values[i] if values is not None else default_value
         shapes.append((gj, val))
     if merge_alg not in {"replace", "add"}:

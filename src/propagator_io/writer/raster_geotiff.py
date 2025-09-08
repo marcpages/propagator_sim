@@ -6,12 +6,11 @@ from typing import Callable
 import numpy as np
 import numpy.typing as npt
 import rasterio as rio
+from pyproj import CRS
+from rasterio.transform import Affine
 
 from propagator.models import PropagatorOutput
-from propagator_io.geo import reproject, trim_values, GeographicInfo
-from pyproj import Proj
-from rasterio.transform import Affine
-from rasterio.crs import CRS
+from propagator_io.geo import GeographicInfo, reproject, trim_values
 
 from .protocol import RasterWriterProtocol
 
@@ -20,11 +19,27 @@ def write_geotiff(
     filename: str | Path,
     values: npt.NDArray[np.floating] | npt.NDArray[np.integer],
     dst_trans: Affine,
-    dst_prj: Proj,
+    dst_crs: CRS,
     dtype: npt.DTypeLike = np.uint8,
+    compression: str = "deflate",
 ) -> None:
-    """Write a single-band GeoTIFF with provided transform and CRS."""
-    dst_crs = CRS.from_proj4(dst_prj.srs)
+    """Write a single-band GeoTIFF with provided transform and CRS.
+
+    Parameters
+    ----------
+    filename : str or Path
+        Output GeoTIFF file path.
+    values : ndarray
+        2D array of raster values.
+    dst_trans : Affine
+        Affine transform for the raster.
+    dst_crs : CRS
+        Coordinate reference system.
+    dtype : DTypeLike, optional
+        Data type for output raster, by default np.uint8.
+    compression : str, optional
+        Compression type for GeoTIFF (e.g., "deflate", "lzw"), by default "deflate".
+    """
     with rio.Env():
         with rio.open(
             filename,
@@ -37,6 +52,7 @@ def write_geotiff(
             nodata=0,
             transform=dst_trans,
             crs=dst_crs,
+            compress=compression,
         ) as f:
             f.write(values.astype(dtype), indexes=1)
 
@@ -50,7 +66,7 @@ class GeoTiffWriter(RasterWriterProtocol):
         Callable[[PropagatorOutput], npt.NDArray[np.floating]],
     ]
     geo_info: GeographicInfo
-    dst_prj: Proj
+    dst_crs: CRS
 
     trim: bool = True
 
@@ -58,15 +74,13 @@ class GeoTiffWriter(RasterWriterProtocol):
         for key, fun in self.raster_variables_mapping.items():
             values = fun(output)
             dst_trans = self.geo_info.trans
-            dst_prj = self.geo_info.prj
 
-            if self.geo_info.prj != self.dst_prj:
-                dst_prj = self.dst_prj
+            if self.geo_info.crs != self.dst_crs:
                 values, dst_trans = reproject(
                     values,
                     self.geo_info.trans,
-                    self.geo_info.prj,
-                    dst_prj,
+                    self.geo_info.crs,
+                    self.dst_crs,
                     trim=self.trim,
                 )
 
@@ -75,4 +89,4 @@ class GeoTiffWriter(RasterWriterProtocol):
 
             tiff_file = self.output_folder / f"{key}_{output.time}.tiff"
             # now it returns the RoS in m/h
-            write_geotiff(tiff_file, values, dst_trans, dst_prj, values.dtype)
+            write_geotiff(tiff_file, values, dst_trans, self.dst_crs, values.dtype)

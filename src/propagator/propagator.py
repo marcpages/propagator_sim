@@ -35,7 +35,7 @@ class Propagator:
     """Stochastic cellular wildfire spread simulator.
 
     PROPAGATOR evolves a binary fire state over a regular grid for a
-    configurable number of realizations. 
+    configurable number of realizations.
     Spread depends on vegetation, topography and environmental drivers
     (wind, moisture) through pluggable probability and travel-time functions.
 

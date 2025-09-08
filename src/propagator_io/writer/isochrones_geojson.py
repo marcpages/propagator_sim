@@ -2,22 +2,20 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-import fiona
 import geopandas as gpd
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+from pyproj import CRS, Proj
 from rasterio.features import shapes
 from rasterio.transform import Affine
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.ndimage.morphology import binary_dilation, binary_erosion
 from scipy.signal.signaltools import medfilt2d
-from shapely.geometry import LineString, MultiLineString, mapping, shape
+from shapely.geometry import LineString, MultiLineString, shape
 
 from propagator.models import PropagatorOutput
-from propagator_io.geo import reproject, GeographicInfo
-from pyproj import Proj
-
+from propagator_io.geo import GeographicInfo, reproject
 from propagator_io.writer.protocol import IsochronesWriterProtocol
 
 TIME_TAG = "time"
@@ -74,7 +72,7 @@ def extract_isochrone(
     for t in thresholds:
         over_t_ = (filt_values >= t).astype("uint8")
         over_t = binary_dilation(
-            binary_erosion(over_t_).astype("uint8")
+            binary_erosion(over_t_).astype("uint8") # type: ignore #binary_erosion has None typing in library
         ).astype(  # type: ignore #binary_erosion has None typing in library
             "uint8"
         )
@@ -95,43 +93,6 @@ def extract_isochrone(
     return results
 
 
-def save_isochrones(results, filename: str, format: str = "geojson") -> None:
-    """Serialize extracted isochrones to GeoJSON or ESRI Shapefile."""
-    if format == "shp":
-        schema = {
-            "geometry": "MultiLineString",
-            "properties": {"value": "float", TIME_TAG: "int"},
-        }
-        # Write a new Shapefile
-        with fiona.open(filename, "w", "ESRI Shapefile", schema) as c:
-            for t in results:
-                for p in results[t]:
-                    if results[t][p].type == "MultiLineString":
-                        c.write(
-                            {
-                                "geometry": mapping(results[t][p]),
-                                "properties": {"value": p, TIME_TAG: t},
-                            }
-                        )
-
-    if format == "geojson":
-        import json
-
-        features = []
-        geojson_obj = dict(type="FeatureCollection", features=features)
-        for t in results:
-            for p in results[t]:
-                if results[t][p].geom_type == "MultiLineString":
-                    features.append(
-                        {
-                            "type": "Feature",
-                            "geometry": mapping(results[t][p]),
-                            "properties": {"value": p, TIME_TAG: t},
-                        }
-                    )
-        with open(filename, "w") as f:
-            f.write(json.dumps(geojson_obj))
-
 
 @dataclass
 class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
@@ -139,7 +100,7 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
     output_folder: Path
     prefix: str
     geo_info: GeographicInfo
-    dst_prj: Proj
+    dst_crs: CRS
 
     thresholds: list[float] = field(default_factory=lambda: [0.5, 0.75, 0.9])
     med_filt_val: int = 9
@@ -150,8 +111,9 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
     _isochrones: gpd.GeoDataFrame = field(init=False)
 
     def __post_init__(self):
+        self.dst_crs = CRS.from_wkt(self.dst_crs.to_wkt())
         self._isochrones = gpd.GeoDataFrame(
-            crs=self.dst_prj.to_proj4(),
+            crs=self.dst_crs,
             columns=["geometry", "date"],
             geometry="geometry",
             index=pd.MultiIndex.from_arrays(
@@ -165,13 +127,13 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
 
         values = output.fire_probability
         dst_trans = self.geo_info.trans
-        prj = self.geo_info.prj
-        if prj != self.dst_prj:
+        crs = self.geo_info.crs
+        if crs != self.dst_crs:
             values, dst_trans = reproject(
                 values,
                 self.geo_info.trans,
-                self.geo_info.prj,
-                self.dst_prj,
+                self.geo_info.crs,
+                self.dst_crs,
             )
 
         isochrones_geoms = extract_isochrone(
@@ -203,6 +165,7 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
                     ]
                 ),
                 geometry="geometry",
+                crs=self.dst_crs
             )
 
         self._isochrones.to_file(json_file, driver="GeoJSON")

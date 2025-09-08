@@ -1,19 +1,19 @@
-from typing import Tuple
 from dataclasses import dataclass
+from typing import Tuple
 
 import numpy as np
 import numpy.typing as npt
 import rasterio as rio
-from pyproj import Proj
-from rasterio import enums, transform, warp, CRS
+from pyproj import CRS, Proj
+from rasterio import enums, transform, warp
 from rasterio.transform import Affine
 
 
 def reproject(
     values: npt.NDArray[np.floating],
     src_trans: Affine,
-    src_prj: Proj,
-    dst_prj: Proj,
+    src_crs: CRS,
+    dst_crs: CRS,
     trim: bool = True,
 ) -> Tuple[npt.NDArray[np.floating], Affine]:
     """Reproject a raster (optionally trimmed) to a different CRS.
@@ -27,9 +27,6 @@ def reproject(
     (west, east), (north, south) = transform.xy(
         src_trans, [0, rows], [0, cols], offset="ul"
     )
-
-    src_crs = CRS.from_proj4(src_prj.srs)
-    dst_crs = CRS.from_proj4(dst_prj.srs)
 
     with rio.Env():
         dst_trans, dw, dh = warp.calculate_default_transform(
@@ -88,7 +85,7 @@ def trim_values(
 
 @dataclass(frozen=True)
 class GeographicInfo:
-    prj: Proj
+    crs: CRS
     trans: transform.Affine
     bounds: tuple[float, float, float, float]
     shape: tuple[int, int]
@@ -124,11 +121,12 @@ class GeographicInfo:
         :return: GeographicInfo object
         """
         prj = Proj(proj=proj, zone=zone, datum=datum)
+        crs = CRS.from_proj4(prj.srs)
         trans = transform.from_bounds(west, south, east, north, cols, rows)
         bounds = (west, south, east, north)
         shape = (rows, cols)
 
-        return GeographicInfo(prj=prj, trans=trans, bounds=bounds, shape=shape)
+        return GeographicInfo(crs=crs, trans=trans, bounds=bounds, shape=shape)
 
     @staticmethod
     def from_file(rio_file: rio.DatasetReader) -> "GeographicInfo":
@@ -146,12 +144,11 @@ class GeographicInfo:
             bounds.top,
         )
 
-        proj = rio_file.crs.to_proj4()
+        crs = rio_file.crs
         transform = rio_file.transform
 
-        prj = Proj(proj)
         return GeographicInfo(
-            prj=prj,
+            crs=crs,
             trans=transform,
             bounds=(west, south, east, north),
             shape=(rows, cols),
