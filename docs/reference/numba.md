@@ -1,7 +1,7 @@
 # NUMBA Backend
 
-::: propagator.numba
+::: propagator.core.numba
 
-::: propagator.numba.propagation
+::: propagator.core.numba.propagation
 
-::: propagator.numba.functions
+::: propagator.core.numba.functions
