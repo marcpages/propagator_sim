@@ -1838,24 +1838,35 @@ wheels = [
 ]
 
 [[package]]
-name = "propagator-sim"
+name = "propagator"
 source = { editable = "." }
 dependencies = [
-    { name = "angles" },
-    { name = "fiona" },
     { name = "numba" },
-    { name = "pyproj" },
-    { name = "rasterio" },
     { name = "scipy" },
 ]
 
 [package.optional-dependencies]
 cli = [
     { name = "affine" },
+    { name = "angles" },
+    { name = "fiona" },
     { name = "geopandas" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pyproj" },
+    { name = "pyyaml" },
+    { name = "rasterio" },
     { name = "rich" },
+    { name = "shapely" },
+    { name = "utm" },
+]
+io = [
+    { name = "affine" },
+    { name = "angles" },
+    { name = "fiona" },
+    { name = "geopandas" },
+    { name = "pyproj" },
+    { name = "rasterio" },
     { name = "shapely" },
     { name = "utm" },
 ]
@@ -1881,20 +1892,29 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "affine", marker = "extra == 'cli'", specifier = ">=2.4.0" },
-    { name = "angles", specifier = ">=2.0" },
-    { name = "fiona", specifier = ">=1.10.1" },
+    { name = "affine", marker = "extra == 'io'", specifier = ">=2.4.0" },
+    { name = "angles", marker = "extra == 'cli'", specifier = ">=2.0" },
+    { name = "angles", marker = "extra == 'io'", specifier = ">=2.0" },
+    { name = "fiona", marker = "extra == 'cli'", specifier = ">=1.10.1" },
+    { name = "fiona", marker = "extra == 'io'", specifier = ">=1.10.1" },
     { name = "geopandas", marker = "extra == 'cli'", specifier = ">=1.1.1" },
+    { name = "geopandas", marker = "extra == 'io'", specifier = ">=1.1.1" },
     { name = "numba", specifier = "==0.61.2" },
     { name = "pydantic", marker = "extra == 'cli'", specifier = ">=2.11.7" },
     { name = "pydantic-settings", marker = "extra == 'cli'", specifier = ">=2.10.1" },
-    { name = "pyproj", specifier = ">=3.7.2" },
-    { name = "rasterio", specifier = ">=1.4.3" },
+    { name = "pyproj", marker = "extra == 'cli'", specifier = ">=3.7.2" },
+    { name = "pyproj", marker = "extra == 'io'", specifier = ">=3.7.2" },
+    { name = "pyyaml", marker = "extra == 'cli'", specifier = ">=6.0.2" },
+    { name = "rasterio", marker = "extra == 'cli'", specifier = ">=1.4.3" },
+    { name = "rasterio", marker = "extra == 'io'", specifier = ">=1.4.3" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=14.1.0" },
     { name = "scipy", specifier = ">=1.16.1" },
     { name = "shapely", marker = "extra == 'cli'", specifier = ">=2.1.1" },
+    { name = "shapely", marker = "extra == 'io'", specifier = ">=2.1.1" },
     { name = "utm", marker = "extra == 'cli'", specifier = ">=0.8.1" },
+    { name = "utm", marker = "extra == 'io'", specifier = ">=0.8.1" },
 ]
-provides-extras = ["cli"]
+provides-extras = ["cli", "io"]
 
 [package.metadata.requires-dev]
 dev = [
