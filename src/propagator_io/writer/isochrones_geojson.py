@@ -6,7 +6,7 @@ import geopandas as gpd
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-from pyproj import CRS, Proj
+from pyproj import CRS
 from rasterio.features import shapes
 from rasterio.transform import Affine
 from scipy.ndimage.filters import gaussian_filter1d

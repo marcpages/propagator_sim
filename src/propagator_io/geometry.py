@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from typing import List, Optional, Union, Sequence
-import re
 import math
+import re
 from enum import Enum
-from pydantic import BaseModel, ConfigDict, model_validator, field_validator
-from typing import Tuple
+from typing import List, Optional, Sequence, Tuple, Union
+
 import numpy as np
 import numpy.typing as npt
+import rasterio.enums as rio_enums
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from pyproj import CRS, Transformer
 from rasterio.features import rasterize
-import rasterio.enums as rio_enums
 
 from propagator_io.geo import GeographicInfo
 

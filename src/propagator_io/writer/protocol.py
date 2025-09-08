@@ -2,9 +2,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Protocol
 
+from pyproj import Proj
+
 from propagator.models import PropagatorOutput
 from propagator_io.geo import GeographicInfo
-from pyproj import Proj
 
 
 class BaseWriterProtocol(Protocol):
