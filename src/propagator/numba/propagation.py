@@ -97,7 +97,6 @@ def fire_spotting(
     return ember_distance, ember_landing_time_min
 
 
-
 @jit(cache=True, nopython=True, fastmath=True)
 def compute_spotting(
     row: int,
@@ -218,7 +217,7 @@ def calculate_fire_behavior(
     w_speed: float,
     p_time_fn: Any,
 ) -> tuple[int, float, float]:
-    """ Calculate fire behaviour during propagation between cells
+    """Calculate fire behaviour during propagation between cells
 
     Parameters
     ----------

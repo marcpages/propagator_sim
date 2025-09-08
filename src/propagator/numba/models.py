@@ -23,6 +23,7 @@ spec = [
     ("name", types.string),
 ]
 
+
 @jitclass(spec)  # type: ignore
 class Fuel:
     def __init__(
@@ -70,8 +71,6 @@ class Fuel:
         self.prob_ign_by_embers = prob_ign_by_embers
         self.burn = burn
         self.name = name
-
-
 
 
 spec = [
@@ -216,11 +215,11 @@ def fuelsystem_from_dict(fuels: dict[int, dict]) -> FuelSystem:
         fuelsystem.add_fuel(
             k,
             fuel["name"],
-            fuel["v0"] / 60,            # converts from m/h to m/min
+            fuel["v0"] / 60,  # converts from m/h to m/min
             fuel["d0"],
             fuel["d1"],
             fuel["hhv"],
-            fuel["humidity"] / 100,     # converts from percentage to fraction
+            fuel["humidity"] / 100,  # converts from percentage to fraction
             fuel.get("spotting", False),
             fuel.get("prob_ign_by_embers", 0.0),
             fuel.get("burn", True),

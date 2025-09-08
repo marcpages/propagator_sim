@@ -41,7 +41,10 @@ class TimedInput(BaseModel):
     )
     w_speed: float = Field(0.0, description="wind speed in km/h")
     moisture: float = Field(
-        0.0, ge=0.0, le=100.0, description="fuel moisture in percentage (0-100)"
+        0.0,
+        ge=0.0,
+        le=100.0,
+        description="fuel moisture in percentage (0-100)",
     )
 
     actions: Optional[list[Action]] = None

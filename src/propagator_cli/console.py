@@ -114,4 +114,3 @@ def error_msg(message: str) -> None:
     get_console().print(
         Panel.fit(Text(message, style="bold red"), border_style="red")
     )
-

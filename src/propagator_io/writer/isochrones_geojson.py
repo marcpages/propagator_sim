@@ -72,7 +72,7 @@ def extract_isochrone(
     for t in thresholds:
         over_t_ = (filt_values >= t).astype("uint8")
         over_t = binary_dilation(
-            binary_erosion(over_t_).astype("uint8") # type: ignore #binary_erosion has None typing in library
+            binary_erosion(over_t_).astype("uint8")  # type: ignore #binary_erosion has None typing in library
         ).astype(  # type: ignore #binary_erosion has None typing in library
             "uint8"
         )
@@ -91,7 +91,6 @@ def extract_isochrone(
                 results[t] = MultiLineString(ml)
 
     return results
-
 
 
 @dataclass
@@ -165,7 +164,7 @@ class IsochronesGeoJSONWriter(IsochronesWriterProtocol):
                     ]
                 ),
                 geometry="geometry",
-                crs=self.dst_crs
+                crs=self.dst_crs,
             )
 
         self._isochrones.to_file(json_file, driver="GeoJSON")

@@ -114,7 +114,6 @@ class PropagatorError(Exception):
     """Domain-specific error raised by PROPAGATOR."""
 
 
-
 @dataclass(frozen=True)
 class BoundaryConditions:
     """
@@ -146,7 +145,6 @@ class BoundaryConditions:
     ignition_mask: Optional[npt.NDArray[np.bool_]] = None
     additional_moisture: Optional[npt.NDArray[np.floating]] = None
     vegetation_changes: Optional[npt.NDArray[np.floating]] = None
-
 
 
 @dataclass(frozen=True)

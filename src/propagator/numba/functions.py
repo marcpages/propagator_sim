@@ -174,7 +174,7 @@ def p_time_rothermel(
         (transition time [min], ROS [m/min]).
     """
 
-    real_dist = np.sqrt(dist ** 2 + dh**2)
+    real_dist = np.sqrt(dist**2 + dh**2)
 
     # wind component in propagation direction
     w_proj = np.cos(w_dir - angle)
@@ -244,7 +244,7 @@ def p_time_wang(
     """
     # velocità di base modulata con la densità(tempo di attraversamento)
 
-    real_dist = np.sqrt(dist ** 2 + dh**2)
+    real_dist = np.sqrt(dist**2 + dh**2)
 
     # wind component in propagation direction
     w_proj = np.cos(w_dir - angle)
@@ -314,7 +314,7 @@ def p_time_standard(
 
     v_wh = clip(v0 * wh * moist_eff, 0.01, 100)
 
-    real_dist = np.sqrt(dist ** 2 + dh**2)
+    real_dist = np.sqrt(dist**2 + dh**2)
     t = real_dist / v_wh
     return t, v_wh
 
@@ -481,11 +481,7 @@ def lhv_fuel(
 
 @jit(cache=True)
 def fireline_intensity(
-    d0: float,
-    d1: float,
-    ros: float,
-    lhv_dead_fuel: float,
-    lhv_canopy: float
+    d0: float, d1: float, ros: float, lhv_dead_fuel: float, lhv_canopy: float
 ) -> float:
     """
     Estimate fireline intensity (kW/m) from fuel loads and Rate of spread.
@@ -553,18 +549,10 @@ def get_probability_to_neighbour(
     """
 
     moisture_effect = p_moist_fn(moisture)
-    alpha_wh = w_h_effect_on_probability(
-        angle, w_speed, w_dir, dh, dist
-    )
+    alpha_wh = w_h_effect_on_probability(angle, w_speed, w_dir, dh, dist)
 
     alpha_wh = np.maximum(alpha_wh, 0)  # prevent alpha < 0
     p_prob = 1 - (1 - transition_probability) ** alpha_wh
     p_prob = clip(p_prob * moisture_effect, 0, 1.0)
     # try the propagation
     return p_prob
-
-
-
-
-
-

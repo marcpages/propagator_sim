@@ -93,9 +93,7 @@ class PropagatorConfigurationLegacy(BaseModel):
         default_factory=list, description="List of boundary conditions"
     )
     do_spotting: bool = Field(False, description="Spotting option")
-    ros_model: RateOfSpreadModel = Field(
-        "wang", description="ROS model name"
-    )
+    ros_model: RateOfSpreadModel = Field("wang", description="ROS model name")
     prob_moist_model: MoistureModel = Field(
         "trucchia", description="Moisture model name"
     )

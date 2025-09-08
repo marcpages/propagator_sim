@@ -89,4 +89,6 @@ class GeoTiffWriter(RasterWriterProtocol):
 
             tiff_file = self.output_folder / f"{key}_{output.time}.tiff"
             # now it returns the RoS in m/h
-            write_geotiff(tiff_file, values, dst_trans, self.dst_crs, values.dtype)
+            write_geotiff(
+                tiff_file, values, dst_trans, self.dst_crs, values.dtype
+            )

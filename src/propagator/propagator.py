@@ -160,7 +160,9 @@ class Propagator:
         """
         return self._compute_variable_mean(self.fireline_int)
 
-    def _compute_variable_mean(self, the_var: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+    def _compute_variable_mean(
+        self, the_var: npt.NDArray[np.floating]
+    ) -> npt.NDArray[np.floating]:
         """Generic mean computation for a 3D variable across realizations,
         ignoring where fire has not spread.
 
@@ -250,7 +252,9 @@ class Propagator:
             event.wind_speed = boundary_condition.wind_speed
         if boundary_condition.additional_moisture is not None:
             # additional moisture is given as % we need to transform it to fraction
-            event.additional_moisture = boundary_condition.additional_moisture / 100.0
+            event.additional_moisture = (
+                boundary_condition.additional_moisture / 100.0
+            )
         if boundary_condition.vegetation_changes is not None:
             event.vegetation_changes = boundary_condition.vegetation_changes
 
@@ -264,12 +268,12 @@ class Propagator:
             )
             ros = np.zeros_like(points_repeated[:, 0], dtype=np.float32)
             event.updates = UpdateBatch(
-                    rows=points_repeated[:, 0],
-                    cols=points_repeated[:, 1],
-                    realizations=realizations,
-                    fireline_intensities=fireline_intensity,
-                    rates_of_spread=ros,
-                )
+                rows=points_repeated[:, 0],
+                cols=points_repeated[:, 1],
+                realizations=realizations,
+                fireline_intensities=fireline_intensity,
+                rates_of_spread=ros,
+            )
 
         self.scheduler.add_event(boundary_condition.time, event)
 
