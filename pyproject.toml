@@ -3,7 +3,7 @@ name = "propagator"
 version = "0.1.0"
 description = "PROPAGATOR: An Operational Cellular-Automata Based Wildfire Simulator"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "angles>=2.0",
     "fiona>=1.10.1",
@@ -32,7 +32,7 @@ dev = [
     "pytest>=8.4.2",
     # Docs
     "mkdocs>=1.6.0",
-    "mkdocs-material>=9.5.0",
+    "mkdocs-material>=9.6.19",
     "mkdocstrings[python]>=0.30.0",
     "mkdocs-gen-files>=0.5.0",
     "mkdocs-literate-nav>=0.6.1",
