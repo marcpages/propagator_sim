@@ -12,22 +12,22 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from propagator.constants import CELLSIZE
-from propagator.models import (
+from propagator.core.constants import CELLSIZE
+from propagator.core.models import (
     BoundaryConditions,
     PropagatorOutput,
     PropagatorStats,
     UpdateBatch,
     UpdateBatchWithTime,
 )
-from propagator.numba import (
+from propagator.core.numba import (
     FUEL_SYSTEM_LEGACY,
     FuelSystem,
     get_p_moisture_fn,
     get_p_time_fn,
     next_updates_fn,
 )
-from propagator.scheduler import Scheduler, SchedulerEvent
+from propagator.core.scheduler import Scheduler, SchedulerEvent
 
 
 @dataclass

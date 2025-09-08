@@ -16,8 +16,10 @@ from pydantic import (
     model_validator,
 )
 
+from propagator.core.models import BoundaryConditions
+
 # ---- project utils ----------------------------------------------------------
-from propagator.numba import (
+from propagator.core.numba import (
     FUEL_SYSTEM_LEGACY,
     MoistureModel,
     RateOfSpreadModel,
@@ -25,11 +27,10 @@ from propagator.numba import (
     get_p_moisture_fn,
     get_p_time_fn,
 )
-from propagator.numba.models import FuelSystem
-from propagator.propagator import BoundaryConditions
-from propagator_io.boundary_conditions import TimedInput
-from propagator_io.geo import GeographicInfo
-from propagator_io.geometry import (
+from propagator.core.numba.models import FuelSystem
+from propagator.io.boundary_conditions import TimedInput
+from propagator.io.geo import GeographicInfo
+from propagator.io.geometry import (
     DEFAULT_EPSG_GEOMETRY,
     Geometry,
     GeometryParser,

@@ -4,8 +4,8 @@ import numpy as np
 import rasterio as rio
 from attr import dataclass
 
-from propagator_io.geo import GeographicInfo
-from propagator_io.loader.protocol import (
+from propagator.io.geo import GeographicInfo
+from propagator.io.loader.protocol import (
     PropagatorDataLoaderException,
     PropagatorInputDataProtocol,
 )

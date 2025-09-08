@@ -12,8 +12,8 @@ from typing import Dict, Iterator, List, Optional, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from propagator.constants import NO_FUEL
-from propagator.models import (
+from propagator.core.constants import NO_FUEL
+from propagator.core.models import (
     UpdateBatch,
     UpdateBatchWithTime,
 )

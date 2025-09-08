@@ -8,8 +8,8 @@ from numba import types
 from numba.experimental import jitclass
 from numba.typed import Dict
 
-from propagator.constants import FUEL_SYSTEM_LEGACY_DICT
-from propagator.models import PropagatorError
+from propagator.core.constants import FUEL_SYSTEM_LEGACY_DICT
+from propagator.core.models import PropagatorError
 
 spec = [
     ("v0", types.float64),

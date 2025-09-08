@@ -2,7 +2,7 @@ from typing import Protocol
 
 import numpy as np
 
-from propagator_io.geo import GeographicInfo
+from propagator.io.geo import GeographicInfo
 
 
 class PropagatorDataLoaderException(Exception): ...

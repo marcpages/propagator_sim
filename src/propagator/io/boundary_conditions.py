@@ -11,14 +11,14 @@ from pydantic import (
     model_validator,
 )
 
-from propagator.propagator import (
+from propagator import (
     BoundaryConditions,
 )
 
 # ---- project utils ----------------------------------------------------------
-from propagator_io.actions import Action, parse_actions
-from propagator_io.geo import GeographicInfo
-from propagator_io.geometry import (
+from propagator.io.actions import Action, parse_actions
+from propagator.io.geo import GeographicInfo
+from propagator.io.geometry import (
     DEFAULT_EPSG_GEOMETRY,
     Geometry,
     GeometryParser,

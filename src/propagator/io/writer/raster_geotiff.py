@@ -9,8 +9,8 @@ import rasterio as rio
 from pyproj import CRS
 from rasterio.transform import Affine
 
-from propagator.models import PropagatorOutput
-from propagator_io.geo import GeographicInfo, reproject, trim_values
+from propagator.core.models import PropagatorOutput
+from propagator.io.geo import GeographicInfo, reproject, trim_values
 
 from .protocol import RasterWriterProtocol
 

@@ -8,18 +8,18 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pyproj import CRS
 
-from propagator.propagator import Propagator
-from propagator_cli.console import info_msg, ok_msg, setup_console
-from propagator_io.configuration import PropagatorConfigurationLegacy
-from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
-from propagator_io.loader.protocol import PropagatorInputDataProtocol
-from propagator_io.loader.tiles import PropagatorDataFromTiles
-from propagator_io.writer import (
+from propagator.cli.console import info_msg, ok_msg, setup_console
+from propagator.core import Propagator
+from propagator.io.configuration import PropagatorConfigurationLegacy
+from propagator.io.loader.geotiff import PropagatorDataFromGeotiffs
+from propagator.io.loader.protocol import PropagatorInputDataProtocol
+from propagator.io.loader.tiles import PropagatorDataFromTiles
+from propagator.io.writer import (
     GeoTiffWriter,
     IsochronesGeoJSONWriter,
     MetadataJSONWriter,
 )
-from propagator_io.writer.protocol import OutputWriter
+from propagator.io.writer.protocol import OutputWriter
 
 
 # --- CLI configuration -------------------------------------------------------

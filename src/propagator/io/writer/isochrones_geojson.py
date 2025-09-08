@@ -14,9 +14,9 @@ from scipy.ndimage.morphology import binary_dilation, binary_erosion
 from scipy.signal.signaltools import medfilt2d
 from shapely.geometry import LineString, MultiLineString, shape
 
-from propagator.models import PropagatorOutput
-from propagator_io.geo import GeographicInfo, reproject
-from propagator_io.writer.protocol import IsochronesWriterProtocol
+from propagator.core.models import PropagatorOutput
+from propagator.io.geo import GeographicInfo, reproject
+from propagator.io.writer.protocol import IsochronesWriterProtocol
 
 TIME_TAG = "time"
 

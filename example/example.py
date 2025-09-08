@@ -2,8 +2,8 @@ from time import time
 
 import numpy as np
 
-from propagator import FUEL_SYSTEM_LEGACY, BoundaryConditions, Propagator
-from propagator_io.loader.geotiff import PropagatorDataFromGeotiffs
+from propagator.core import FUEL_SYSTEM_LEGACY, BoundaryConditions, Propagator
+from propagator.io import PropagatorDataFromGeotiffs
 
 loader = PropagatorDataFromGeotiffs(
     dem_file="example/dem_clip.tif",

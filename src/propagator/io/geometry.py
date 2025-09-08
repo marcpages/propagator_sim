@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from pyproj import CRS, Transformer
 from rasterio.features import rasterize
 
-from propagator_io.geo import GeographicInfo
+from propagator.io.geo import GeographicInfo
 
 DEFAULT_EPSG_GEOMETRY = 4326  # default to WGS84
 

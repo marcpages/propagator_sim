@@ -8,8 +8,8 @@ import rasterio as rio
 import scipy
 import utm
 
-from propagator.models import PropagatorError
-from propagator_io.geo import GeographicInfo
+from propagator.core.models import PropagatorError
+from propagator.io.geo import GeographicInfo
 
 from .protocol import (
     PropagatorDataLoaderException,

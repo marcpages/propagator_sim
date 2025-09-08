@@ -10,8 +10,8 @@ import numpy.typing as npt
 from pydantic import BaseModel, Field, field_validator
 from scipy import ndimage
 
-from propagator_io.geo import GeographicInfo
-from propagator_io.geometry import (
+from propagator.io.geo import GeographicInfo
+from propagator.io.geometry import (
     Geometry,
     GeometryKind,
     GeometryParser,

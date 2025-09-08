@@ -11,9 +11,9 @@ import numpy.typing as npt
 from numba import jit
 from numpy.random import normal, poisson, random, uniform
 
-from propagator.constants import NO_FUEL
-from propagator.models import UpdateBatchTuple
-from propagator.numba.functions import FIRE_SPOTTING_DISTANCE_COEFFICIENT
+from propagator.core.constants import NO_FUEL
+from propagator.core.models import UpdateBatchTuple
+from propagator.core.numba.functions import FIRE_SPOTTING_DISTANCE_COEFFICIENT
 
 from .functions import (
     fireline_intensity,
