@@ -1,5 +1,5 @@
 # Propagator Module
 
-::: propagator.propagator
+::: propagator.core
 
-::: propagator.scheduler
+::: propagator.core.scheduler
