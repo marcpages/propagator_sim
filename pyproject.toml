@@ -14,23 +14,35 @@ readme = "README.md"
 
 requires-python = ">=3.11"
 dependencies = [
-    "angles>=2.0",
-    "fiona>=1.10.1",
     "numba==0.61.2",
-    "pyproj>=3.7.2",
-    "rasterio>=1.4.3",
     "scipy>=1.16.1",
 ]
 
 [project.optional-dependencies]
 cli = [
-    "rich>=14.1.0",
+    "angles>=2.0",
+    "fiona>=1.10.1",
+    "pyproj>=3.7.2",
+    "rasterio>=1.4.3",
     "shapely>=2.1.1",
     "utm>=0.8.1",
     "affine>=2.4.0",
     "geopandas>=1.1.1",
+    # cli specific    
+    "rich>=14.1.0",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
+]
+
+geo = [
+    "angles>=2.0",
+    "fiona>=1.10.1",
+    "pyproj>=3.7.2",
+    "rasterio>=1.4.3",
+    "shapely>=2.1.1",
+    "utm>=0.8.1",
+    "affine>=2.4.0",
+    "geopandas>=1.1.1",
 ]
 
 [dependency-groups]
