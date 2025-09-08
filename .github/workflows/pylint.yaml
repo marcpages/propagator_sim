@@ -1,0 +1,32 @@
+name: Pylint
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ensure the requested Python is on PATH so uv uses it
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Install uv (fast Python package manager) with caching
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+
+      # Install project with dev dependencies into .venv
+      # If you use dependency groups instead of [tool.uv].dev-dependencies,
+      # change to: uv sync --group dev
+      - name: Install dev dependencies with uv
+        run: uv sync --dev
+
+      - name: Analyse code with pylint
+        run: uv run pylint $(git ls-files '*.py')
