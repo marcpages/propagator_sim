@@ -548,7 +548,7 @@ class Propagator:
         stats = self.compute_stats(fire_probability)
 
         return PropagatorOutput(
-            time=self.time,
+            time=int(self.time),
             fire_probability=fire_probability,
             ros_mean=ros_mean,
             ros_max=ros_max,

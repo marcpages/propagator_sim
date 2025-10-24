@@ -138,6 +138,7 @@ def status_propagator_msg(
     init_date: datetime,
     time: int,
     stats: PropagatorStats,
+    *,
     verbose: bool = False,
 ) -> None:
     """
@@ -155,21 +156,25 @@ def status_propagator_msg(
         "%Y-%m-%d %H:%M:%S"
     )
     msg = (
-        f"Time: {timedelta(seconds=time)!s:>8} | "
-        f"Date: {date_str} | "
-        f"Active: {stats.n_active:>3} | "
-        f"Mean area: {(stats.area_mean / 10000):>7.2f} ha | "
+        f"Time: {format_timedelta(timedelta(seconds=time))!s:>9} | "
+        + (f"Date: {date_str} | " if verbose else "")
+        + f"Active: {stats.n_active:>3} | "
+        + f"Mean area: {(stats.area_mean / 10000):>7.2f} ha"
     )
     if verbose:
         msg += (
-            f"Area 50%: {(stats.area_50 / 10000):>7.2f} ha | "
+            f" | Area 50%: {(stats.area_50 / 10000):>7.2f} ha | "
             f"Area 75%: {(stats.area_75 / 10000):>7.2f} ha | "
             f"Area 90%: {(stats.area_90 / 10000):>7.2f} ha"
         )
     get_console().print(msg)
 
 
-# ---------- printers ----------
+def format_timedelta(td: timedelta) -> str:
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
 
 
 def _geom_to_custom_str(geom: Any) -> str:

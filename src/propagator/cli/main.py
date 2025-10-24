@@ -319,9 +319,9 @@ def main() -> None:
 
                 status_propagator_msg(
                     cfg.init_date,
-                    simulator.time,
+                    output.time,
                     output.stats,
-                    cli.verbose,
+                    verbose=cli.verbose,
                 )
 
                 writer.write_output(output)
