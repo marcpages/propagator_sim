@@ -1,15 +1,26 @@
 import json
-from datetime import datetime, timedelta
+import os
+import time
+from datetime import datetime
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, Mapping, Optional
 from warnings import warn
 
-from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import yaml
+from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, CliImplicitFlag, SettingsConfigDict
 from pyproj import CRS
 
-from propagator.cli.console import info_msg, ok_msg, setup_console
-from propagator.core import Propagator
+from propagator.cli.console import (
+    info_msg,
+    print_boundary_conditions_table,
+    print_table,
+    setup_console,
+    status_propagator_msg,
+)
+from propagator.core import Propagator, PropagatorOutOfBoundsError
+from propagator.core.numba import FUEL_SYSTEM_LEGACY, fuelsystem_from_dict
+from propagator.core.numba.models import FuelSystem
 from propagator.io.configuration import PropagatorConfigurationLegacy
 from propagator.io.loader.geotiff import PropagatorDataFromGeotiffs
 from propagator.io.loader.protocol import PropagatorInputDataProtocol
@@ -55,9 +66,26 @@ class PropagatorCLILegacy(BaseSettings):
         ...,
         description="Path to output folder where results will be saved",
     )
-    record: bool = Field(
+    isochrones: list[float] = Field(
+        [0.5, 0.75, 0.9],
+        description="Isochrones thresholds to be saved. \
+            Default: [0.5,0.75,0.9]",
+    )
+
+    record: CliImplicitFlag[bool] = Field(
         False,
         description="Export run logs",
+    )
+
+    ignore_out_of_bounds: CliImplicitFlag[bool] = Field(
+        False,
+        description="Continue simulation when reaching bounds.",
+    )
+
+    # Quiet mode to suppress console output, set to true when --quiet is passed
+    verbose: CliImplicitFlag[bool] = Field(
+        False,
+        description="Enable verbose output",
     )
 
     # ---------- checks ----------
@@ -71,8 +99,36 @@ class PropagatorCLILegacy(BaseSettings):
             raise ValueError("Configuration file not found.")
         return v
 
+    @field_validator("fuel_config", mode="before")
+    @classmethod
+    def _check_fuel_config_file(cls, v: str | Path | None) -> Optional[Path]:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = Path(v)
+        # check if the file exists
+        if not v.is_file():
+            raise ValueError("Fuel configuration file not found.")
+        return v
+
+    @field_validator("output", mode="before")
+    @classmethod
+    def _check_output_folder(cls, v: str | Path) -> Path:
+        if isinstance(v, str):
+            v = Path(v)
+        # check if the folder exists
+        if not v.is_dir():
+            os.makedirs(v, exist_ok=True)
+        return v
+
     @model_validator(mode="after")
     def _check_mode_files(self):
+        # if you provide dem and fuel, then automatically set in geotiff mode
+        if self.dem is not None and self.fuel is not None:
+            if self.mode == "tiles":
+                self.mode = "geotiff"
+
+        # check required files based on mode
         if self.mode == "geotiff":
             if self.dem is None or self.fuel is None:
                 raise ValueError(
@@ -83,57 +139,87 @@ class PropagatorCLILegacy(BaseSettings):
                 warn("TILESET will be ignored in 'geotiff' mode")
             if self.tilespath is not None:
                 warn("TILESPATH will be ignored in 'geotiff' mode")
+            # check if files exist
+            self.dem = Path(self.dem)
+            self.fuel = Path(self.fuel)
+            if not self.dem.is_file():
+                raise ValueError(f"DEM file {self.dem} not found.")
+            if not self.fuel.is_file():
+                raise ValueError(f"FUEL file {self.fuel} not found.")
 
         elif self.mode == "tiles":
-            if self.dem is not None or self.fuel is not None:
-                warn(
-                    "DEM and FUEL files shouldn't be \
-                    provided in 'tiles' mode and will be ignored."
-                )
             if self.tilespath is None:
                 raise ValueError(
                     "TILESPATH path must be provided in 'tiles' mode"
                 )
-
             if not self.tilespath.exists():
                 raise ValueError(
                     f"TILESPATH path {self.tilespath} does not exist"
                 )
+
         return self
 
     def build_configuration(self) -> PropagatorConfigurationLegacy:
-        """Merge CLI config and JSON config into one validated object.
-        NOTE: CLI config override JSON config in case of overlapping"""
+        """Create configuration object from provided JSON file."""
         with open(self.config) as f:
             json_cfg = json.load(f)
-        # CLI values override JSON if both are provided
-        return PropagatorConfigurationLegacy(**json_cfg, **self.model_dump())
+        return PropagatorConfigurationLegacy(**json_cfg)
+
+
+def fuels_from_yaml(path: str | Path) -> FuelSystem:
+    path = Path(path)
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    fuels_node = data.get("fuels")
+    if not isinstance(fuels_node, Mapping):
+        raise ValueError("YAML must contain 'fuels' (mapping)")
+    # coerce IDs to int and build Fuel objects
+    fs = fuelsystem_from_dict(fuels_node)  # type: ignore
+    return fs
 
 
 # --- main function -----------------------------------------------------------
-def main():
+def main() -> None:
     simulation_time = datetime.now()
+    start = time.time()
 
-    info_msg("Initializing CLI...")
     # pydantic-settings is taking care of it
     cli = PropagatorCLILegacy()  # type: ignore
-    ok_msg("CLI initialized")
-    # print(cli.model_dump())
 
     if cli.record:
-        basename = (
-            f"propagator_run_{simulation_time.strftime('%Y%m%d_%H%M%S')}"
-        )
-        setup_console(record_path=cli.output, basename=basename)
+        setup_console(record_path=cli.output, basename="run")
     else:
         setup_console()
-    ok_msg("Console initialized")
 
-    info_msg("Loading configuration from JSON file...")
+    if cli.verbose:
+        info_msg(f"Run time: {simulation_time}")
+
     cfg = cli.build_configuration()
-    ok_msg("Configuration loaded")
 
-    loader: PropagatorInputDataProtocol
+    if cli.verbose:
+        table_data: dict[str, BaseModel | dict] = {
+            "Run Info": {"Sim time": simulation_time.isoformat()},
+            "CLI Args": cli,
+            "Loaded Config": cfg,
+        }
+        print_table(
+            table_data,
+            title="Simulation Configuration",
+            skip_fields=["boundary_conditions", "verbose"],  # too verbose
+            header_style="bold green",
+            section_style="bold yellow",
+        )
+
+    if cli.fuel_config is not None:
+        fuel_system = fuels_from_yaml(cli.fuel_config)
+        if cli.verbose:
+            info_msg(f"Fuel system loaded from {cli.fuel_config}")
+    else:
+        fuel_system = FUEL_SYSTEM_LEGACY
+        if cli.verbose:
+            info_msg("Using legacy fuel system")
+
+    loader: PropagatorInputDataProtocol | None = None
+
     if cli.mode == "tiles":
         # first extract middle point from configuration
         mid_point = cfg.get_ignitions_middle_point()
@@ -142,21 +228,20 @@ def main():
 
         mid_lat, mid_lon = mid_point[1], mid_point[0]
         loader = PropagatorDataFromTiles(
-            base_path=str(cfg.tilespath),
+            base_path=str(cli.tilespath),
             tileset=cli.tileset if cli.tileset is not None else "default",
             mid_lat=mid_lat,
             mid_lon=mid_lon,
             grid_dim=2000,
         )
-
     elif cli.mode == "geotiff":
         # loader geographic information
         loader = PropagatorDataFromGeotiffs(
-            dem_file=str(cfg.dem),
-            veg_file=str(cfg.fuel),
+            dem_file=str(cli.dem),
+            veg_file=str(cli.fuel),
         )
     else:
-        raise ValueError(f"Unknown mode {cli.mode}")
+        raise ValueError(f"Unknown mode: {cli.mode}")
 
     # Load the data
     dem = loader.get_dem()
@@ -169,21 +254,24 @@ def main():
         raster_variables_mapping={
             "fire_probability": lambda output: output.fire_probability,
             "fireline_intensity_mean": lambda output: output.fli_mean,
+            "fireline_intensity_max": lambda output: output.fli_max,
+            "ros_mean": lambda output: output.ros_mean,
+            "ros_max": lambda output: output.ros_max,
         },
-        output_folder=cfg.output,
+        output_folder=cli.output,
         geo_info=geo_info,
         dst_crs=dst_crs,
     )
 
     metadata_writer = MetadataJSONWriter(
-        start_date=cfg.init_date, output_folder=cfg.output, prefix="metadata"
+        start_date=cfg.init_date, output_folder=cli.output, prefix="metadata"
     )
 
     isochrones_writer = IsochronesGeoJSONWriter(
         start_date=cfg.init_date,
-        output_folder=cfg.output,
+        output_folder=cli.output,
         prefix="isochrones",
-        thresholds=[0.9, 0.95],
+        thresholds=cli.isochrones,
         geo_info=geo_info,
         dst_crs=dst_crs,
     )
@@ -194,44 +282,56 @@ def main():
         isochrones_writer=isochrones_writer,
     )
 
-    args = dict()
-    if cfg.p_time_fn is not None:
-        args.update(dict(p_time_fn=cfg.p_time_fn))
-    if cfg.p_moist_fn is not None:
-        args.update(dict(p_moist_fn=cfg.p_moist_fn))
-
     simulator = Propagator(
         dem=dem,
         veg=veg,
         realizations=cfg.realizations,
-        fuels=cfg.fuel_system,
+        fuels=fuel_system,
         do_spotting=cfg.do_spotting,
-        **args,
+        out_of_bounds_mode="ignore" if cli.ignore_out_of_bounds else "raise",
+        p_time_fn=cfg.p_time_fn if cfg.p_time_fn is not None else None,
+        p_moist_fn=cfg.p_moist_fn if cfg.p_moist_fn is not None else None,
     )
 
-    non_vegetated = cfg.fuel_system.get_non_vegetated()
+    non_vegetated = fuel_system.get_non_vegetated()
     boundary_conditions_list = cfg.get_boundary_conditions(
         geo_info, non_vegetated
     )
     for boundary_condition in boundary_conditions_list:
         simulator.set_boundary_conditions(boundary_condition)
 
+    if cli.verbose:
+        print_boundary_conditions_table(cfg.boundary_conditions)
+
     while True:
         next_time = simulator.next_time()
         if next_time is None:
             break
 
-        simulator.step()
+        try:
+            simulator.step()
+        except PropagatorOutOfBoundsError as e:
+            warn(f"Simulation stopped due to PropagatorOutOfBoundsError: {e}")
+            break
+        finally:
+            if simulator.time % cfg.time_resolution == 0:
+                output = simulator.get_output()
 
-        if simulator.time % cfg.time_resolution == 0:
-            ref_date = cfg.init_date + timedelta(minutes=int(simulator.time))
-            info_msg(f"Time: {simulator.time} -> {ref_date}")
-            output = simulator.get_output()
-            # Save the output to the specified folder
-            writer.write_output(output)
+                status_propagator_msg(
+                    cfg.init_date,
+                    simulator.time,
+                    output.stats,
+                    cli.verbose,
+                )
+
+                writer.write_output(output)
 
         if simulator.time > cfg.time_limit:
             break
+
+    end = time.time()
+    if cli.verbose:
+        info_msg(f"Execution time: {end - start:.2f} seconds")
 
 
 # %%

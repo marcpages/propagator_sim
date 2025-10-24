@@ -132,10 +132,8 @@ dmypy.json
 tmp/
 data/
 work/
-.vscode/launch.json
 
-.vscode/settings.json
 .DS_Store
 
 output/
-
+example/*.xml

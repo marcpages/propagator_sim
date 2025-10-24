@@ -21,7 +21,9 @@ from propagator.io.geo import GeographicInfo
 from propagator.io.geometry import (
     DEFAULT_EPSG_GEOMETRY,
     Geometry,
-    GeometryParser,
+    GeometryKind,
+    get_middle_point,
+    parse_geometry_list,
     rasterize_geometries,
 )
 
@@ -30,18 +32,18 @@ from propagator.io.geometry import (
 class TimedInput(BaseModel):
     """Single time-step boundary conditions."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
-    time: int = Field(0, description="minutes from simulation start")
+    time: int = Field(0, description="seconds from simulation start")
 
     # Weather conditions
-    w_dir: float = Field(
-        default=0,
-        description="wind direction in degrees from north",
+    w_dir: Optional[float] = Field(
+        None,
+        description="wind direction clockwise in degrees from north (north=0)",
     )
-    w_speed: float = Field(0.0, description="wind speed in km/h")
-    moisture: float = Field(
-        0.0,
+    w_speed: Optional[float] = Field(None, description="wind speed in km/h")
+    moisture: Optional[float] = Field(
+        None,
         ge=0.0,
         le=100.0,
         description="fuel moisture in percentage (0-100)",
@@ -56,12 +58,14 @@ class TimedInput(BaseModel):
     @classmethod
     def _coerce_speed(cls, v):
         if v is None:
-            return 0.0
+            return v
         return float(v)
 
     @field_validator("w_dir", mode="before")
     @classmethod
     def _coerce_wdir(cls, v):
+        if v is None:
+            return v
         x = float(v)
         if x < 0:
             x = 360 + (x % 360)
@@ -86,17 +90,25 @@ class TimedInput(BaseModel):
         if "ignitions" in data:
             v = data["ignitions"]
             if isinstance(v, list) and (not v or isinstance(v[0], str)):
-                data["ignitions"] = GeometryParser.parse_geometry_list(
-                    v, allowed={"point", "line", "polygon"}, epsg=epsg
+                data["ignitions"] = parse_geometry_list(
+                    v,
+                    allowed={
+                        GeometryKind.POINT,
+                        GeometryKind.LINE,
+                        GeometryKind.POLYGON,
+                    },
+                    epsg=epsg,
                 )
         # let actions.py parse and normalize legacy fields
-        new_actions, consumed = parse_actions(data, epsg=epsg)
-        if len(new_actions) != 0:
-            # append to any already-provided "actions"
-            data["actions"] = list(data.get("actions", [])) + new_actions
-            # remove consumed legacy keys so they don't error as "extra"
-            for k in consumed:
-                data.pop(k, None)
+        legacy_actions = parse_actions(data, epsg=epsg)
+        # append to any already-provided "actions"
+        existing_actions = data.get("actions")
+        if existing_actions is None:
+            data["actions"] = legacy_actions
+        elif isinstance(existing_actions, list):
+            data["actions"] = [*existing_actions, *legacy_actions]
+        else:
+            raise ValueError("actions must be provided as a list")
         return data
 
     def get_boundary_conditions(
@@ -105,12 +117,19 @@ class TimedInput(BaseModel):
         non_vegetated: int,
     ) -> BoundaryConditions:
         # rasterize weather conditions > so far given as scalars
-        w_speed_arr = np.ones(geo_info.shape) * self.w_speed
-        w_dir_arr = np.ones(geo_info.shape) * self.w_dir
-        moisture_arr = np.ones(geo_info.shape) * self.moisture
+        w_speed_arr = None
+        w_dir_arr = None
+        moisture_arr = None
         ignition_mask = None
         additional_moisture = None
         vegetation_changes = None
+
+        if self.w_speed is not None:
+            w_speed_arr = np.ones(geo_info.shape) * self.w_speed
+        if self.w_dir is not None:
+            w_dir_arr = np.ones(geo_info.shape) * self.w_dir
+        if self.moisture is not None:
+            moisture_arr = np.ones(geo_info.shape) * self.moisture
 
         if self.ignitions is not None:
             ignition_mask = rasterize_geometries(
@@ -128,6 +147,8 @@ class TimedInput(BaseModel):
                 if moist_action is not None:
                     if additional_moisture is None:
                         additional_moisture = np.zeros(geo_info.shape)
+                    if moisture_arr is None:
+                        moisture_arr = np.zeros(geo_info.shape)
                     # in case of multiple actions, take the one
                     # that have maximum effect e.g. max moisture
                     moisture_arr_tmp = moisture_arr + additional_moisture
@@ -147,10 +168,9 @@ class TimedInput(BaseModel):
                 )
                 if fuel_action is not None:
                     if vegetation_changes is None:
-                        vegetation_changes = np.zeros(
-                            geo_info.shape, dtype=int
-                        )
-                    vegetation_changes = np.where(
+                        vegetation_changes = np.full(geo_info.shape, np.nan)
+
+                    vegetation_changes = np.where(  # type: ignore
                         np.isnan(fuel_action),
                         vegetation_changes,
                         fuel_action,
@@ -174,7 +194,7 @@ class TimedInput(BaseModel):
         if self.ignitions is None or len(self.ignitions) == 0:
             return None
         ignitions_middle_points = [
-            ignition.get_middle_point() for ignition in self.ignitions
+            get_middle_point(ignition) for ignition in self.ignitions
         ]
         ignitions_middle_points = [
             mp for mp in ignitions_middle_points if mp is not None
@@ -184,6 +204,6 @@ class TimedInput(BaseModel):
             return None
 
         # Return the average of the middle points
-        avg_x = float(np.mean([pt[0] for pt in ignitions_middle_points]))
-        avg_y = float(np.mean([pt[1] for pt in ignitions_middle_points]))
+        avg_x = float(np.mean([pt[0] for pt in ignitions_middle_points]))  # type: ignore
+        avg_y = float(np.mean([pt[1] for pt in ignitions_middle_points]))  # type: ignore
         return avg_x, avg_y

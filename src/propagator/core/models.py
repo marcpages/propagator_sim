@@ -32,18 +32,44 @@ class UpdateBatch:
     rows: npt.NDArray[np.integer] = field(
         default_factory=lambda: np.empty((0,), dtype=np.int32)
     )
+
     cols: npt.NDArray[np.integer] = field(
         default_factory=lambda: np.empty((0,), dtype=np.int32)
     )
+
     realizations: npt.NDArray[np.integer] = field(
         default_factory=lambda: np.empty((0,), dtype=np.int32)
     )
+
     rates_of_spread: npt.NDArray[np.float32] = field(
         default_factory=lambda: np.empty((0,), dtype=np.float32)
     )
+
     fireline_intensities: npt.NDArray[np.float32] = field(
         default_factory=lambda: np.empty((0,), dtype=np.float32)
     )
+
+    bbox: Optional[tuple[int, int, int, int]] = field(init=False, default=None)
+
+    def __post_init__(self):
+        n = len(self.rows)
+        if not (
+            len(self.cols) == n
+            and len(self.realizations) == n
+            and len(self.rates_of_spread) == n
+            and len(self.fireline_intensities) == n
+        ):
+            raise ValueError("All input arrays must have the same length")
+
+        if n == 0:
+            self.bbox = None
+            return
+
+        r0 = int(np.min(self.rows))
+        c0 = int(np.min(self.cols))
+        r1 = int(np.max(self.rows))
+        c1 = int(np.max(self.cols))
+        self.bbox = (r0, c0, r1, c1)
 
     def extend(self, other: "UpdateBatch") -> None:
         self.rows = np.concatenate([self.rows, other.rows])
@@ -56,6 +82,22 @@ class UpdateBatch:
         )
         self.fireline_intensities = np.concatenate(
             [self.fireline_intensities, other.fireline_intensities]
+        )
+
+        if self.bbox is None:
+            self.bbox = other.bbox
+            return
+
+        if other.bbox is None:
+            return
+
+        r0, c0, r1, c1 = self.bbox
+        or0, oc0, or1, oc1 = other.bbox
+        self.bbox = (
+            min(r0, or0),
+            min(c0, oc0),
+            max(r1, or1),
+            max(c1, oc1),
         )
 
 
@@ -123,11 +165,11 @@ class BoundaryConditions:
     Attributes
     ----------
     time : int
-        Simulation time the conditions refer to.
+        Simulation time the conditions refer to (seconds from simulation start).
     moisture : Optional[npt.NDArray[np.floating]]
         Fuel moisture map (%).
     wind_dir : Optional[npt.NDArray[np.floating]]
-        Wind direction map (radians, mathematical convention).
+        Wind direction map (weather convention, degrees clockwise, north is 0).
     wind_speed : Optional[npt.NDArray[np.floating]]
         Wind speed map (km/h).
     ignition_mask : Optional[npt.NDArray[np.bool_]]
@@ -160,6 +202,7 @@ class PropagatorStats:
     def to_dict(
         self, c_time: int, ref_date: datetime
     ) -> dict[str, float | int | str]:
+        """Serialize stats with the current simulation time expressed in seconds."""
         return dict(
             c_time=c_time,
             ref_date=ref_date.isoformat(),
@@ -175,7 +218,7 @@ class PropagatorStats:
 class PropagatorOutput:
     """Snapshot of simulation outputs at a given time step."""
 
-    time: int
+    time: int  # seconds from simulation start
     fire_probability: npt.NDArray[np.floating]
     ros_mean: npt.NDArray[np.floating]
     ros_max: npt.NDArray[np.floating]

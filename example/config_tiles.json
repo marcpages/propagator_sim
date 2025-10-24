@@ -1,17 +1,17 @@
 {
     "init_date": "202209011500",
     "ignitions": [
-        "POINT: 52.51751;-6.82354"        
+        "POINT: 38.57378462391781;16.294903540640014"
     ],
     "realizations": 100,
-    "time_limit": 2400,
+    "time_limit": 144000,
     "do_spotting": false,
-    "time_resolution": 60,
+    "time_resolution": 600,
     "boundary_conditions": [
         {
             "time": 0,
-            "w_dir": 10,
-            "w_speed": 30,
+            "w_dir": 0,
+            "w_speed": 60,
             "moisture": 0
         }
     ]

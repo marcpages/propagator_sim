@@ -1,11 +1,39 @@
+from typing import Literal
+
 TICK_PRECISION = 10
-CELLSIZE = 20
+CELLSIZE = 20  # [m]
+REALIZATIONS = 100
+
+# --- DEFAULT MODELS ---
+ROS_DEFAULT: Literal["wang", "rothermel"] = "wang"
+MOISTURE_MODEL_DEFAULT: Literal["trucchia", "baghino"] = "trucchia"
+
 
 # --- FUEL SYSTEM LEGACY ---
 NO_FUEL = 0
 
 
 FUEL_SYSTEM_LEGACY_DICT = {
+    # key_fuel: dict(
+    #     name="name_fuel",
+    #     v0=140,  # nominal rate of spread - in m/h
+    #     d0=1.5,  # dead fuel load - in kg/m2
+    #     hhv=20000,  # higher heating value - in kJ/kg
+    #     d1=3,  # live fuel load - in kg/m2 (optional)
+    #     humidity=60, # live fuel moisture - in percentage (optional)
+    #     spread_probability={  # spread probability to other fuel types
+    #         1: 0.3,
+    #         2: 0.375,
+    #         3: 0.005,
+    #         4: 0.45,
+    #         5: 0.225,
+    #         6: 0.25,
+    #         7: 0.075,
+    #     },
+    #     spotting=False,  # if the fuel type is prone to spotting (optional)
+    #     prob_ign_by_embers=0.0,  # prob. of ignition by embers (optional)
+    #     burn=True,  # if the fuel type is combustible (optional)
+    # ),
     1: dict(
         name="broadleaves",
         v0=140,
@@ -44,9 +72,7 @@ FUEL_SYSTEM_LEGACY_DICT = {
         name="non-vegetated",
         v0=20,
         d0=0.1,
-        d1=0,
         hhv=100,
-        humidity=-9999,
         spread_probability={
             1: 0.005,
             2: 0.005,
@@ -62,9 +88,7 @@ FUEL_SYSTEM_LEGACY_DICT = {
         name="grassland",
         v0=120,
         d0=0.5,
-        d1=0,
         hhv=17000,
-        humidity=-9999,
         spread_probability={
             1: 0.25,
             2: 0.35,

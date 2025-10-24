@@ -4,15 +4,15 @@ from typing import Optional, Protocol
 
 from pyproj import Proj
 
-from propagator.io.geo import GeographicInfo
 from propagator.core.models import PropagatorOutput
+from propagator.io.geo import GeographicInfo
 
 
 class BaseWriterProtocol(Protocol):
     start_date: datetime
 
     def ref_date(self, output: PropagatorOutput) -> datetime:
-        ref_date = self.start_date + timedelta(minutes=int(output.time))
+        ref_date = self.start_date + timedelta(seconds=int(output.time))
         return ref_date
 
 

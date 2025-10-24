@@ -28,12 +28,12 @@ spec = [
 class Fuel:
     def __init__(
         self,
+        name: str,
         v0: float,
         d0: float,
-        d1: float,
         hhv: float,
-        humidity: float,
-        name: str,
+        d1: float = 0.0,
+        humidity: float = -9999.0,
         spotting: bool = False,
         prob_ign_by_embers: float = 0.0,
         burn: bool = True,
@@ -43,18 +43,18 @@ class Fuel:
 
         Parameters
         ----------
+        name : str
+            The name of the fuel type
         v0 : float
             The initial spread rate (m/min)
         d0 : float
             The dead fuel density (kg/m^2)
-        d1 : float
-            The live fuel density (kg/m^2)
         hhv : float
             The higher heating value (KJ/kg)
-        humidity : float
+        d1 : float, optional
+            The live fuel density (kg/m^2)
+        humidity : float, optional
             The fuel moisture content (fraction)
-        name : str
-            The name of the fuel type
         spotting : bool, optional
             Whether the fuel type is prone to spotting (default is False)
         prob_ign_by_embers : float, optional
@@ -131,9 +131,9 @@ class FuelSystem:
         name: str,
         v0: float,
         d0: float,
-        d1: float,
         hhv: float,
-        humidity: float,
+        d1: float = 0.0,
+        humidity: float = -9999.0,
         spotting: bool = False,
         prob_ign_by_embers: float = 0.0,
         burn: bool = True,
@@ -151,11 +151,11 @@ class FuelSystem:
             The initial spread rate (m/min)
         d0 : float
             The dead fuel density (kg/m^2)
-        d1 : float
-            The live fuel density (kg/m^2)
         hhv : float
             The higher heating value (KJ/kg)
-        humidity : float
+        d1 : float, optional
+            The live fuel density (kg/m^2)
+        humidity : float, optional
             The fuel moisture content (fraction)
         spotting : bool, optional
             Whether the fuel type is prone to spotting (default is False)
@@ -196,30 +196,46 @@ class FuelSystem:
             raise PropagatorError(f"Fuel ID {fuel_id} does not exist.")
         i = self.fuels_id[fuel_id]
         return Fuel(
+            self.name[i],  # type: ignore
             self.v0[i],  # type: ignore
             self.d0[i],  # type: ignore
-            self.d1[i],  # type: ignore
             self.hhv[i],  # type: ignore
+            self.d1[i],  # type: ignore
             self.humidity[i],  # type: ignore
-            self.name[i],  # type: ignore
             self.spotting[i],  # type: ignore
             self.prob_ign_by_embers[i],  # type: ignore
             self.burn[i],  # type: ignore
         )
+
+    def disable_spotting(self):
+        for i in range(len(self.spotting)):
+            self.spotting[i] = False
+            self.prob_ign_by_embers[i] = 0.0
 
 
 def fuelsystem_from_dict(fuels: dict[int, dict]) -> FuelSystem:
     n_fuels = len(fuels)
     fuelsystem = FuelSystem(n_fuels)
     for k, fuel in fuels.items():
+        humid = fuel.get("humidity", -9999.0)
+        d1 = fuel.get("d1", 0.0)
+        # converts from percentage to fraction
+        humidity = humid / 100 if humid != -9999.0 else humid
+        # check if humidity and d1 are consistent:
+        # if humidity is -9999.0, d1 must be 0.0
+        if humidity == -9999.0 and d1 != 0.0:
+            raise PropagatorError(
+                f"Inconsistent fuel data for fuel ID {k}: "
+                "humidity is -9999.0 but d1 is not 0.0."
+            )
         fuelsystem.add_fuel(
             k,
             fuel["name"],
             fuel["v0"] / 60,  # converts from m/h to m/min
             fuel["d0"],
-            fuel["d1"],
             fuel["hhv"],
-            fuel["humidity"] / 100,  # converts from percentage to fraction
+            d1,
+            humidity,
             fuel.get("spotting", False),
             fuel.get("prob_ign_by_embers", 0.0),
             fuel.get("burn", True),
