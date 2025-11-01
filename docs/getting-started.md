@@ -37,7 +37,7 @@ extras from the install command.
 ## First Simulation
 
 The repository ships with small GeoTIFF datasets and configuration files under
-`example/`. Run a deterministic simulation in GeoTIFF mode with:
+`example/`. Run a simulation in GeoTIFF mode with:
 
 ```bash
 uv run propagator \
