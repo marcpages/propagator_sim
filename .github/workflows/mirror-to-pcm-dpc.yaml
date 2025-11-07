@@ -1,0 +1,42 @@
+name: Mirror main to pcm-dpc
+
+on:
+    push:
+        branches:
+            - main
+        tags:
+            - v*
+
+jobs:
+    mirror:
+        name: Push to pcm-dpc/propagator
+        runs-on: ubuntu-latest
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  persist-credentials: false
+
+            - name: Push main to downstream repository
+              env:
+                  TARGET_REPO: pcm-dpc/propagator.git
+                  PUSH_TOKEN: ${{ secrets.PROPAGATOR_PUSH_TO_PCMDPC_REPO_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  if [ -z "${PUSH_TOKEN}" ]; then
+                    echo "Secret PROPAGATOR_PUSH_TO_PCMDPC_REPO_TOKEN is missing or empty"; exit 1
+                  fi
+
+                  git config user.name "pcmdpc"
+                  git config user.email "maplite@protezionecivile.it"
+
+                  git remote add downstream "https://x-access-token:${PUSH_TOKEN}@github.com/${TARGET_REPO}"
+
+                  # Probe access early
+                  git ls-remote --heads downstream >/dev/null || { echo "No access to pcm-dpc/propagator with provided token"; exit 1; }
+
+                  # Make lease meaningful
+                  git fetch downstream main || true
+                  git push downstream HEAD:main --force-with-lease=refs/heads/main
+                  git push downstream --prune --tags
