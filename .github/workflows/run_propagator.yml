@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install system dependencies (GDAL, PROJ, GEOS, SpatialIndex)
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -36,30 +36,44 @@ jobs:
       - name: Create virtual environment
         run: python -m venv .venv
 
-      - name: Install Python dependencies with extras
+      - name: Install Python dependencies
         run: |
           source .venv/bin/activate
           pip install --upgrade pip setuptools wheel
           pip install -e ".[cli,io]"
 
-      - name: Download example DEM & FUEL files
+      - name: Download example DEM & Fuel
         run: |
           mkdir -p example
           wget -O example/dem.tif https://raw.githubusercontent.com/CIMAFoundation/propagator_sim/main/example/dem.tif
           wget -O example/fuel.tif https://raw.githubusercontent.com/CIMAFoundation/propagator_sim/main/example/fuel.tif
 
-      - name: Patch config.json to use downloaded DEM/FUEL
+      - name: Patch config.json
         run: |
           CONFIG="${{ github.event.inputs.config_path }}"
+          echo "Patching config: $CONFIG"
+          if [ ! -f "$CONFIG" ]; then
+            echo "ERROR: Config file not found!"
+            exit 1
+          fi
           python - <<EOF
-          import json
-          with open("$CONFIG", "r") as f:
-              cfg = json.load(f)
-          cfg["dem"] = "example/dem.tif"
-          cfg["fuel"] = "example/fuel.tif"
-          with open("$CONFIG", "w") as f:
-              json.dump(cfg, f, indent=2)
-          EOF
+import json
+
+config_file = "$CONFIG"
+
+with open(config_file, "r") as f:
+    cfg = json.load(f)
+
+# Force DEM and FUEL keys at root level
+cfg["dem"] = "example/dem.tif"
+cfg["fuel"] = "example/fuel.tif"
+
+with open(config_file, "w") as f:
+    json.dump(cfg, f, indent=2)
+
+print("Final config:")
+print(json.dumps(cfg, indent=2))
+EOF
 
       - name: Run Propagator
         run: |
