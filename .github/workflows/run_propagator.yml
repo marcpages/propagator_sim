@@ -25,21 +25,27 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install GDAL system dependencies
+      # SYSTEM DEPS for rasterio, geopandas, fiona, shapely, etc.
+      - name: Install GDAL + GIS libs
         run: |
           sudo apt-get update
-          sudo apt-get install -y gdal-bin libgdal-dev
-          export CPLUS_INCLUDE_PATH=/usr/include/gdal
-          export C_INCLUDE_PATH=/usr/include/gdal
+          sudo apt-get install -y \
+            gdal-bin libgdal-dev \
+            libproj-dev proj-data proj-bin \
+            libgeos-dev libspatialindex-dev
 
-      - name: Install Python deps (including missing PyYAML)
+      - name: Create virtual environment
+        run: python -m venv .venv
+
+      - name: Install Python dependencies (with extras)
         run: |
-          pip install --upgrade pip wheel setuptools
-          pip install pyyaml
-          pip install .
+          source .venv/bin/activate
+          pip install --upgrade pip setuptools wheel
+          pip install -e ".[cli,io]"
 
       - name: Run Propagator
         run: |
+          source .venv/bin/activate
           CONFIG="${{ github.event.inputs.config_path }}"
           OUTDIR="${{ github.event.inputs.output_dir }}"
           mkdir -p "$OUTDIR"
