@@ -1,24 +1,28 @@
 {
-    "init_date": "202209011500",
-    "ignitions": [
-        "POINT: [52.51751;-6.82354]"
-    ],
-    "realizations": 10,
-    "time_limit": 144000,
-    "do_spotting": false,
-    "time_resolution": 3600,
-    "boundary_conditions": [
-        {
-            "time": 0,
-            "w_dir": 0,
-            "w_speed": 30,
-            "moisture": 0
-        },
-        {
-            "time": 7200,
-            "w_dir": 90,
-            "w_speed": 30,
-            "moisture": 0
-        }
-    ]
+  "init_date": "202209011500",
+  "ignitions": [
+    "POINT: [52.51751;-6.82354]"
+  ],
+  "realizations": 10,
+  "time_limit": 144000,
+  "do_spotting": false,
+  "time_resolution": 3600,
+
+  "dem": "example/dem.tif",
+  "fuel": "example/fuel.tif",
+
+  "boundary_conditions": [
+    {
+      "time": 0,
+      "w_dir": 0,
+      "w_speed": 30,
+      "moisture": 0
+    },
+    {
+      "time": 7200,
+      "w_dir": 90,
+      "w_speed": 30,
+      "moisture": 0
+    }
+  ]
 }
