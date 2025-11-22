@@ -25,22 +25,24 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install uv
-        run: pip install uv
-
-      - name: Create uv virtual environment
-        run: uv venv .venv
-
-      - name: Install project inside venv
+      - name: Install system dependencies (GDAL + rasterio requirements)
         run: |
-          .venv/bin/uv pip install .
+          sudo apt-get update
+          sudo apt-get install -y gdal-bin libgdal-dev
+          export CPLUS_INCLUDE_PATH=/usr/include/gdal
+          export C_INCLUDE_PATH=/usr/include/gdal
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install .
 
       - name: Run Propagator
         run: |
           CONFIG="${{ github.event.inputs.config_path }}"
           OUTDIR="${{ github.event.inputs.output_dir }}"
           mkdir -p "$OUTDIR"
-          .venv/bin/uv run propagator --config "$CONFIG" --mode geotiff --output "$OUTDIR"
+          propagator --config "$CONFIG" --mode geotiff --output "$OUTDIR"
 
       - name: Upload results
         uses: actions/upload-artifact@v4
