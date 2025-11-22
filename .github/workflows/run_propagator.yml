@@ -25,23 +25,22 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install uv (recommended by project)
-        run: |
-          pip install uv
+      - name: Install uv
+        run: pip install uv
 
-      - name: Install dependencies
-        run: |
-          uv pip install .
+      - name: Create uv virtual environment
+        run: uv venv .venv
 
-      - name: List project files (debug)
-        run: ls -R
+      - name: Install project inside venv
+        run: |
+          .venv/bin/uv pip install .
 
       - name: Run Propagator
         run: |
           CONFIG="${{ github.event.inputs.config_path }}"
           OUTDIR="${{ github.event.inputs.output_dir }}"
           mkdir -p "$OUTDIR"
-          uv run propagator --config "$CONFIG" --mode geotiff --output "$OUTDIR"
+          .venv/bin/uv run propagator --config "$CONFIG" --mode geotiff --output "$OUTDIR"
 
       - name: Upload results
         uses: actions/upload-artifact@v4
