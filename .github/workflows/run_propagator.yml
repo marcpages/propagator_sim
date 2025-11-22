@@ -57,23 +57,23 @@ jobs:
             exit 1
           fi
           python - <<EOF
-import json
-
-config_file = "$CONFIG"
-
-with open(config_file, "r") as f:
-    cfg = json.load(f)
-
-# Force DEM and FUEL keys at root level
-cfg["dem"] = "example/dem.tif"
-cfg["fuel"] = "example/fuel.tif"
-
-with open(config_file, "w") as f:
-    json.dump(cfg, f, indent=2)
-
-print("Final config:")
-print(json.dumps(cfg, indent=2))
-EOF
+          import json
+          
+          config_file = "$CONFIG"
+          
+          with open(config_file, "r") as f:
+              cfg = json.load(f)
+          
+          # Force DEM and FUEL keys at root level
+          cfg["dem"] = "example/dem.tif"
+          cfg["fuel"] = "example/fuel.tif"
+          
+          with open(config_file, "w") as f:
+              json.dump(cfg, f, indent=2)
+          
+          print("Final config:")
+          print(json.dumps(cfg, indent=2))
+          EOF
 
       - name: Run Propagator
         run: |
