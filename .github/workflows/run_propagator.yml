@@ -25,16 +25,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install system dependencies (GDAL + rasterio requirements)
+      - name: Install GDAL system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gdal-bin libgdal-dev
           export CPLUS_INCLUDE_PATH=/usr/include/gdal
           export C_INCLUDE_PATH=/usr/include/gdal
 
-      - name: Install Python dependencies
+      - name: Install Python deps (including missing PyYAML)
         run: |
-          pip install --upgrade pip
+          pip install --upgrade pip wheel setuptools
+          pip install pyyaml
           pip install .
 
       - name: Run Propagator
