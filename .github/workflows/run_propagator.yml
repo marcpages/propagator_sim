@@ -25,8 +25,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      # SYSTEM DEPS for rasterio, geopandas, fiona, shapely, etc.
-      - name: Install GDAL + GIS libs
+      - name: Install system dependencies (GDAL, PROJ, GEOS, SpatialIndex)
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -37,11 +36,30 @@ jobs:
       - name: Create virtual environment
         run: python -m venv .venv
 
-      - name: Install Python dependencies (with extras)
+      - name: Install Python dependencies with extras
         run: |
           source .venv/bin/activate
           pip install --upgrade pip setuptools wheel
           pip install -e ".[cli,io]"
+
+      - name: Download example DEM & FUEL files
+        run: |
+          mkdir -p example
+          wget -O example/dem.tif https://raw.githubusercontent.com/CIMAFoundation/propagator_sim/main/example/dem.tif
+          wget -O example/fuel.tif https://raw.githubusercontent.com/CIMAFoundation/propagator_sim/main/example/fuel.tif
+
+      - name: Patch config.json to use downloaded DEM/FUEL
+        run: |
+          CONFIG="${{ github.event.inputs.config_path }}"
+          python - <<EOF
+          import json
+          with open("$CONFIG", "r") as f:
+              cfg = json.load(f)
+          cfg["dem"] = "example/dem.tif"
+          cfg["fuel"] = "example/fuel.tif"
+          with open("$CONFIG", "w") as f:
+              json.dump(cfg, f, indent=2)
+          EOF
 
       - name: Run Propagator
         run: |
