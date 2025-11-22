@@ -1,0 +1,50 @@
+name: Run Propagator Simulation
+
+on:
+  workflow_dispatch:
+    inputs:
+      config_path:
+        description: "Path to the simulation config JSON"
+        required: true
+        default: "example/config.json"
+      output_dir:
+        description: "Directory where outputs will be saved"
+        required: false
+        default: "output"
+
+jobs:
+  run-simulation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv (recommended by project)
+        run: |
+          pip install uv
+
+      - name: Install dependencies
+        run: |
+          uv pip install .
+
+      - name: List project files (debug)
+        run: ls -R
+
+      - name: Run Propagator
+        run: |
+          CONFIG="${{ github.event.inputs.config_path }}"
+          OUTDIR="${{ github.event.inputs.output_dir }}"
+          mkdir -p "$OUTDIR"
+          uv run propagator --config "$CONFIG" --mode geotiff --output "$OUTDIR"
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: propagator-output
+          path: ${{ github.event.inputs.output_dir }}
